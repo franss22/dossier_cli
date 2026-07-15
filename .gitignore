@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Virtual environment
+.venv/
+
+# Generated output
+output/*
+!output/.keep
+
+# Temporary processing files
+temp_input/*
+!temp_input/.keep
+
+*.mkv
