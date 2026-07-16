@@ -9,6 +9,11 @@ REPO_ROOT = Path(__file__).parents[3].absolute()
 TEMP_INPUT_DIR = REPO_ROOT / "temp_input"
 """Directory for temporary input files"""
 
+FFPROBE = REPO_ROOT / "ffmpeg" / "bin" / "ffprobe.exe"
+"""Absolute path to the ffprobe executable"""
+FFMPEG = REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"
+"""Absolute path to the ffmpeg executable"""
+
 
 def create_run_directory(name: str = "", base_dir: Path = TEMP_INPUT_DIR) -> Path:
     """Create a unique directory for a processing run."""

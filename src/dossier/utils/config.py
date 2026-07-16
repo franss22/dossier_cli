@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
+import functools
 from pathlib import Path
 import tomllib
+from typing import Any
+
 
 from dossier.utils.dir import REPO_ROOT
+from typing import get_type_hints
 
 
 @dataclass(slots=True)
@@ -22,7 +27,7 @@ class AudioConfig:
 class TranscriptionConfig:
     """Transcription model settings loaded from the `[transcription]` section."""
 
-    model: str = "medium"
+    model_size: str = "medium"
     language: str = "en"
     device: str = "cpu"
     compute_type: str = "int8"
@@ -37,13 +42,6 @@ class OutputConfig:
 
 
 @dataclass(slots=True)
-class DiarizationConfig:
-    """Diarization settings loaded from the `[diarization]` section."""
-
-    enabled: bool = False
-
-
-@dataclass(slots=True)
 class AnalysisConfig:
     """Analysis settings loaded from the `[analysis]` section."""
 
@@ -53,26 +51,13 @@ class AnalysisConfig:
 
 
 @dataclass(slots=True)
-class ObsidianConfig:
-    """Obsidian export settings loaded from the `[obsidian]` section."""
-
-    enabled: bool = False
-    vault: str = ""
-
-
-
-
-
-@dataclass(slots=True)
 class AppConfig:
     """Top-level application configuration composed from the TOML file."""
 
     audio: AudioConfig = field(default_factory=AudioConfig)
     transcription: TranscriptionConfig = field(default_factory=TranscriptionConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
-    diarization: DiarizationConfig = field(default_factory=DiarizationConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
-    obsidian: ObsidianConfig = field(default_factory=ObsidianConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> AppConfig:
@@ -81,12 +66,63 @@ class AppConfig:
             audio=AudioConfig(**data.get("audio", {})),
             transcription=TranscriptionConfig(**data.get("transcription", {})),
             output=OutputConfig(**data.get("output", {})),
-            diarization=DiarizationConfig(**data.get("diarization", {})),
             analysis=AnalysisConfig(**data.get("analysis", {})),
-            obsidian=ObsidianConfig(**data.get("obsidian", {})),
         )
 
+    def shadow(self, **kwargs: Any) -> AppConfig:
+        """Create a new AppConfig instance with overridden values.
+
+        This method allows for temporary overrides of configuration values without modifying the original instance.
+        """
+        config = deepcopy(self)
+
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+
+            path = config_map().get(key)
+            if path is None:
+                continue
+
+            section_name, field_name = path
+            setattr(getattr(config, section_name), field_name, value)
+
+        return config
+
+
 CONFIG_PATH = REPO_ROOT / "config.toml"
+hints = get_type_hints(AppConfig)
+
+
+def build_config_map() -> dict[str, tuple[str, str]]:
+    """Build a mapping of CLI/config keys to (section, field)."""
+    data = tomllib.load(CONFIG_PATH.open("rb"))
+
+    # Find duplicate leaf names.
+    counts: dict[str, int] = {}
+    for section in data.values():
+        for key in section:
+            counts[key] = counts.get(key, 0) + 1
+
+    mapping: dict[str, tuple[str, str]] = {}
+
+    for section_name, section in data.items():
+        for key in section:
+            # Always add the prefixed version.
+            mapping[f"{section_name}_{key}"] = (section_name, key)
+
+            # Only add the short version if it's unique.
+            if counts[key] == 1:
+                mapping[key] = (section_name, key)
+
+    return mapping
+
+
+@functools.cache
+def config_map() -> dict[str, tuple[str, str]]:
+    """Return a cached mapping of CLI/config keys to (section, field)."""
+    return build_config_map()
+
 
 def load_config(config_path: str | Path = CONFIG_PATH) -> AppConfig:
     """Load application configuration from a TOML file."""
@@ -94,5 +130,3 @@ def load_config(config_path: str | Path = CONFIG_PATH) -> AppConfig:
     with path.open("rb") as f:
         raw_config = tomllib.load(f)
     return AppConfig.from_dict(raw_config)
-
-

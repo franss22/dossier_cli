@@ -1,36 +1,15 @@
 """Processes the initial audio file into a digestible format for the model to consume."""
 
-from dataclasses import dataclass
 import math
 from pathlib import Path
 import subprocess
 from orjson import loads as json_loads
-from typing import Any, TypedDict
+from typing import Any
+from dossier.utils.types import AudioStream, AudioChunk
 
 from rich.progress import Progress
 
-from dossier.utils.dir import REPO_ROOT
-
-FFPROBE = REPO_ROOT / "ffmpeg" / "bin" / "ffprobe.exe"
-FFMPEG = REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"
-
-
-class AudioStream(TypedDict):
-    """Represents an audio stream in the input file."""
-
-    index: int
-    codec_name: str
-    sample_rate: int
-    channels: int
-
-
-@dataclass(slots=True)
-class AudioChunk:
-    """Represents a chunk of audio extracted from the input file."""
-
-    path: Path
-    start_time: float
-    duration: float
+from dossier.utils.dir import FFMPEG, FFPROBE
 
 
 def run_ffmpeg(*args: str) -> subprocess.CompletedProcess[bytes]:

@@ -5,7 +5,7 @@ overlap_seconds = 60
 sample_rate = 16000
 
 [transcription]
-model = "medium"
+model_size = "medium"
 language = "es"
 device = "cpu"
 compute_type = "int8"
@@ -14,14 +14,7 @@ compute_type = "int8"
 directory = "output"
 format = ["json", "md"]
 
-[diarization]
-enabled = false
-
 [analysis]
 enabled = false
 provider = "gemini"
 model = "gemini-2.5-flash"
-
-[obsidian]
-enabled = false
-vault = ""

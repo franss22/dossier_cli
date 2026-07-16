@@ -6,7 +6,6 @@ from typing import Annotated
 
 import typer
 
-from dossier.transcribe import WhisperTranscriber
 from dossier.utils.config import load_config
 from dossier.utils.dir import create_run_directory, REPO_ROOT
 from dossier.audio import probe_audio_streams, process_recording
@@ -40,6 +39,8 @@ def process_recording_command(
     overlap_seconds: int | None = typer.Option(None),
 ) -> None:
     """Process a recording into chunked, overlapping segments."""
+    from dossier.transcribe import WhisperTranscriber
+
     config = load_config()
     temp_dir = create_run_directory(name=input_file.stem)
     output_dir = output_dir or temp_dir

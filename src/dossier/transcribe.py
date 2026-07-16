@@ -1,28 +1,14 @@
 """wav transcription functions."""
 
+from pathlib import Path
+
 from faster_whisper import WhisperModel
 
 from dossier.audio import AudioChunk
+from dossier.utils.dir import REPO_ROOT
+from dossier.utils.types import Segment, TranscribedChunk
 
-
-from dataclasses import dataclass
-
-
-@dataclass(slots=True)
-class Segment:
-    """Represents a segment of transcribed audio.
-
-    ```
-    0.00 → 4.82   "Welcome back..."
-    4.82 → 9.15   "Last session..."
-    9.15 → 13.01  "You entered the hotel..."
-    ```
-    """
-
-    start: float
-    end: float
-    text: str
-    speaker: str | None
+PROMPT = REPO_ROOT / "transcription_prompt.md"
 
 
 class WhisperTranscriber:
@@ -30,6 +16,7 @@ class WhisperTranscriber:
 
     _model: WhisperModel
     language: str | None
+    prompt: Path | None = None
 
     def __init__(
         self,
@@ -37,8 +24,11 @@ class WhisperTranscriber:
         device: str,
         compute_type: str,
         language: str | None,
+        prompt: Path | None = None,
     ) -> None:
+
         self.language = language
+        self.prompt = prompt
 
         self._model = WhisperModel(
             model_name,
@@ -49,13 +39,13 @@ class WhisperTranscriber:
     def transcribe_chunk(
         self,
         chunk: AudioChunk,
-        initial_prompt: str | None = None,
-    ) -> list[Segment]:
+    ) -> TranscribedChunk:
         """Transcribe a single audio chunk."""
+        prompt_text = self.prompt.read_text() if self.prompt else None
         segments, _info = self._model.transcribe(
             str(chunk.path),
             language=self.language,
-            # initial_prompt=initial_prompt,
+            initial_prompt=prompt_text,
         )
         return [
             Segment(
