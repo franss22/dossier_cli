@@ -1,6 +1,5 @@
 {
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "charliermarsh.ruff",
   "python.analysis.typeCheckingMode": "standard",
   "search.exclude": {
     "**/ffmpeg": true,
@@ -17,5 +16,8 @@
     "**/ffmpeg/**": true,
     "**/__pycache__": true,
     "**/*.egg-info": true
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
   }
 }

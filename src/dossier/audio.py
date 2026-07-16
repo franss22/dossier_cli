@@ -1,5 +1,6 @@
 """Processes the initial audio file into a digestible format for the model to consume."""
 
+from dataclasses import dataclass
 import math
 from pathlib import Path
 import subprocess
@@ -13,6 +14,7 @@ from dossier.utils.dir import REPO_ROOT
 FFPROBE = REPO_ROOT / "ffmpeg" / "bin" / "ffprobe.exe"
 FFMPEG = REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"
 
+
 class AudioStream(TypedDict):
     """Represents an audio stream in the input file."""
 
@@ -20,6 +22,15 @@ class AudioStream(TypedDict):
     codec_name: str
     sample_rate: int
     channels: int
+
+
+@dataclass(slots=True)
+class AudioChunk:
+    """Represents a chunk of audio extracted from the input file."""
+
+    path: Path
+    start_time: float
+    duration: float
 
 
 def run_ffmpeg(*args: str) -> subprocess.CompletedProcess[bytes]:
@@ -33,17 +44,18 @@ def run_ffmpeg(*args: str) -> subprocess.CompletedProcess[bytes]:
 
 def run_ffprobe(*args: str) -> subprocess.CompletedProcess[bytes]:
     """Run ffprobe with the provided arguments."""
-    result =  subprocess.run(
+    result = subprocess.run(
         [FFPROBE, *args],
         check=True,
         capture_output=True,
     )
 
     if result.returncode != 0:
-            print(result.stderr.decode())
-            result.check_returncode()
+        print(result.stderr.decode())
+        result.check_returncode()
 
     return result
+
 
 def probe_audio_streams(input_file: Path) -> list[AudioStream]:
     """Probe the audio streams of the input file."""
@@ -59,7 +71,7 @@ def probe_audio_streams(input_file: Path) -> list[AudioStream]:
         str(input_file),
     )
 
-    data:  dict[str, Any]= json_loads(result.stdout)
+    data: dict[str, Any] = json_loads(result.stdout)
 
     return [
         {
@@ -88,6 +100,7 @@ def probe_duration(input_file: Path) -> float:
 
     return float(data["format"]["duration"])
 
+
 def split_audio(
     input_file: Path,
     output_dir: Path,
@@ -95,7 +108,7 @@ def split_audio(
     chunk_minutes: int,
     overlap_seconds: int,
     sample_rate: int,
-) -> list[Path]:
+) -> list[AudioChunk]:
     """Split the input audio file into overlapping chunks."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -104,7 +117,7 @@ def split_audio(
 
     total_chunks = math.ceil(duration / step_seconds)
 
-    chunks: list[Path] = []
+    chunks: list[AudioChunk] = []
 
     with Progress() as progress:
         task = progress.add_task(
@@ -116,7 +129,7 @@ def split_audio(
             total=total_chunks,
         )
 
-        for index in range(total_chunks):
+        for index in range(min(total_chunks, 1)):  # TODO: Remove the `min` function to process all chunks
             start = index * step_seconds
 
             if start >= duration:
@@ -142,12 +155,11 @@ def split_audio(
                 "pcm_s16le",
                 str(output),
             )
+            chunks.append(AudioChunk(path=output, start_time=start, duration=min(chunk_seconds, duration - start)))
 
-            chunks.append(output)
             progress.advance(task)
 
     return chunks
-
 
 
 def process_recording(
@@ -156,9 +168,9 @@ def process_recording(
     chunk_minutes: int,
     overlap_seconds: int,
     sample_rate: int,
-) -> list[Path]:
+) -> list[AudioChunk]:
     """Process the input recording into overlapping audio chunks."""
-    # streams = probe_audio_streams(input_file) # TODO: handle mullti-stream recordings
+    # streams = probe_audio_streams(input_file) # TODO: handle multi-stream recordings
     duration = probe_duration(input_file)
 
     return split_audio(

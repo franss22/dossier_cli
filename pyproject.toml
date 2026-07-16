@@ -5,12 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    "faster-whisper>=1.2.1",
     "orjson>=3.11.9",
     "rich>=15.0.0",
     "torch>=2.8.0",
     "torchaudio>=2.8.0",
     "typer>=0.26.8",
-    "whisperx>=3.8.6",
 ]
 
 [tool.uv]
