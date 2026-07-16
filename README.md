@@ -12,7 +12,7 @@ Designed for long-form tabletop sessions such as Delta Green campaigns.
 - Preserve timestamps and recording context
 - Produce portable transcript formats
 - Keep processing modular and tool-agnostic
-- Provide optional AI-assisted analysis
+- Provide optional AI-assisted analysis (future)
 
 ---
 
@@ -44,14 +44,14 @@ Designed for long-form tabletop sessions such as Delta Green campaigns.
 
 Phase 1 — Artifact System
 
-- [ ] Define artifact directory structure
-- [ ] Define JSON schemas
-    - [ ] Audio artifact
-    - [ ] Chunk manifest
-    - [ ] Chunk transcript
-    - [ ] Final transcript
-- [ ] Add artifact versioning
-- [ ] Add artifact loading/saving
+- [x] Define artifact directory structure
+- [x] Define JSON schemas
+    - [x] Audio artifact
+    - [x] Chunk manifest
+    - [x] Chunk transcript
+    - [x] Final transcript
+- [x] Add artifact versioning
+- [x] Add artifact loading/saving
 
 Goal:
 
@@ -63,15 +63,9 @@ Goal:
 
 Support real-world tabletop recording setups.
 
-### Single Track
-
-- [x] Single audio stream recordings
-- [ ] Better handling of long recordings
 
 ### Multi Track
 
-- [ ] Detect multiple audio streams
-- [ ] Extract individual tracks
 - [ ] Track metadata
     - [ ] Stream index
     - [ ] Channel information
