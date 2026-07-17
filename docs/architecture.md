@@ -47,13 +47,13 @@ recordings/
     │       │
     │       ├── manifest.json
     │       │
-    │       ├── chunk_000/
-    │       │   ├── track_001.wav
-    │       │   └── track_002.wav
+    │       ├── track_001/
+    │       │   ├── chunk_000.wav
+    │       │   └── chunk_001.wav
     │       │
-    │       └── chunk_001/
-    │           ├── track_001.wav
-    │           └── track_002.wav
+    │       └── track_002/
+    │           ├── chunk_000.wav
+    │           └── chunk_001.wav
     │
     ├── transcripts/
     │   └── chunk_000/
