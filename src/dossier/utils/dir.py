@@ -16,6 +16,9 @@ FFMPEG = REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"
 """Absolute path to the ffmpeg executable"""
 STORAGE_ROOT = REPO_ROOT / "storage"
 
+RECORDINGS_DIR = STORAGE_ROOT / "recordings"
+"""Directory for storing recordings and their artifacts"""
+
 
 def create_run_directory(name: str = "", base_dir: Path = TEMP_INPUT_DIR) -> Path:
     """Create a unique directory for a processing run."""

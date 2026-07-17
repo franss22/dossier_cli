@@ -8,10 +8,11 @@ from pathlib import Path
 import secrets
 from typing import Any
 from dossier.artifact.base import ArtifactMetadata
-from dossier.storage import create_recording_directory, get_recording_path
+from dossier.artifact.index import IndexController
+from dossier.storage import create_recording_directory, save_file
 from dossier.artifact.recording import RecordingArtifact, RecordingMetadata, RecordingSource
 from orjson import loads as json_loads
-from dossier.utils.dir import calculate_sha256
+from dossier.utils.dir import RECORDINGS_DIR, calculate_sha256
 from dossier.utils.ffmpeg import run_ffmpeg, run_ffprobe
 from dossier.utils.types import AudioStream
 import zipfile
@@ -19,7 +20,7 @@ from tempfile import TemporaryDirectory
 from slugify import slugify
 
 
-def idify(name: str) -> str:
+def generate_recording_id(name: str) -> str:
     """Generate a unique ID for the recording, still human readable and relevant to the workspace name."""
     date = datetime.now(UTC).strftime("%Y-%m-%d")
     slug = slugify(name, word_boundary=True, max_length=40)
@@ -46,7 +47,7 @@ def create_recording_artifact(
     Returns:
         A populated RecordingArtifact.
     """
-    workspace_path = get_recording_path(rec_id)
+    workspace_path = RECORDINGS_DIR / rec_id
 
     return RecordingArtifact(
         recording=RecordingMetadata(
@@ -64,7 +65,7 @@ def create_recording_artifact(
     )
 
 
-def import_recording(
+def ingest_recording(
     input_file: Path,
     workspace_name: str,
     aliases: list[str] | None = None,
@@ -82,27 +83,33 @@ def import_recording(
     Returns:
         A populated RecordingArtifact.
     """
-    rec_id = idify(workspace_name)
+    rec_id = generate_recording_id(workspace_name)
     if not rec_id:
         raise ValueError(
             "Failed to generate a valid recording ID. Make sure the workspace name is valid and not empty."
         )
+
+    IndexController().add_recording(rec_id, workspace_name, aliases)
+
     workspace_path = create_recording_directory(rec_id)
     input_file = Path(input_file)
-    files = []
+    tracks = []
     if input_file.name.endswith(".flac.zip"):
-        files = import_craig(input_file, workspace_path / "audio", sample_rate)
+        tracks = import_craig(input_file, workspace_path / "audio", sample_rate)
     elif input_file.suffix == ".mkv":
-        files = import_mkv(input_file, workspace_path / "audio", sample_rate)
+        tracks = import_mkv(input_file, workspace_path / "audio", sample_rate)
     else:
         raise ValueError("Unsupported input file format. Only .flac.zip (craig) and .mkv are supported.")
 
-    return create_recording_artifact(
+    artifact = create_recording_artifact(
         input_file=input_file,
         rec_id=rec_id,
         workspace_name=workspace_name,
-        tracks=files,
+        tracks=tracks,
     )
+    save_file(artifact)
+
+    return artifact
 
 
 def import_mkv(

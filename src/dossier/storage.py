@@ -7,13 +7,13 @@ objects.
 from pathlib import Path
 
 from dossier.artifact.base import Artifact
-from dossier.artifact.index import IndexArtifact
-from dossier.utils.dir import STORAGE_ROOT
+from dossier.artifact.index import Index
+from dossier.utils.dir import RECORDINGS_DIR
 
 
-def save_artifact(
-    artifact: Artifact,
-) -> None:
+def save_file(
+    artifact: Artifact | Index,
+) -> Path:
     """Save an artifact to disk."""
     path = artifact.storage_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -22,13 +22,16 @@ def save_artifact(
         artifact.model_dump_json(indent=2),
         encoding="utf-8",
     )
+    return path
 
 
-def load_artifact[T: Artifact](
+def load_file[T: Artifact | Index](
     path: Path,
     model: type[T],
 ) -> T:
     """Load an artifact from disk."""
+    if not path.exists():
+        raise FileNotFoundError(f"Artifact file not found: {path}")
     return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
@@ -50,7 +53,7 @@ def create_recording_directory(
     workspace_id: str,
 ) -> Path:
     """Create a recording workspace."""
-    recording_dir = STORAGE_ROOT / workspace_id
+    recording_dir = RECORDINGS_DIR / workspace_id
 
     recording_dir.mkdir(parents=True, exist_ok=True)
 
@@ -63,7 +66,7 @@ def create_recording_directory(
 
 def get_recording_path(workspace_id: str, folder: str | None = None) -> Path:
     """Get the path to a recording workspace or a subfolder."""
-    recording_dir = STORAGE_ROOT / workspace_id
+    recording_dir = RECORDINGS_DIR / workspace_id
     if folder:
         recording_dir = recording_dir / folder
     return recording_dir
@@ -73,7 +76,7 @@ def recording_exists(
     workspace_id: str,
 ) -> bool:
     """Return whether a recording workspace exists."""
-    return (STORAGE_ROOT / workspace_id).exists()
+    return (RECORDINGS_DIR / workspace_id).exists()
 
 
 def delete_recording_directory(
@@ -83,6 +86,6 @@ def delete_recording_directory(
     import shutil
 
     shutil.rmtree(
-        STORAGE_ROOT / workspace_id,
+        RECORDINGS_DIR / workspace_id,
         ignore_errors=True,
     )

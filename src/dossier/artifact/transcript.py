@@ -75,6 +75,15 @@ class TranscriptManifestArtifact(Artifact):
         """Exact storage location for this artifact."""
         return self.workspace_path() / "transcripts" / self.processing.id / "manifest.json"
 
+    @classmethod
+    def load(cls, recording_id: str, processing_id: str) -> "TranscriptManifestArtifact":
+        """Load a transcript manifest artifact from disk."""
+        from dossier.storage import load_file
+
+        path = cls.workspace_path_static(recording_id) / "transcripts" / processing_id / "manifest.json"
+
+        return load_file(path, cls)
+
 
 class ChunkTranscriptArtifact(Artifact):
     """
@@ -93,6 +102,15 @@ class ChunkTranscriptArtifact(Artifact):
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
         return self.workspace_path() / "transcripts" / self.processing.id / f"{self.chunk.id}.json"
+
+    @classmethod
+    def load(cls, recording_id: str, processing_id: str, chunk_id: str) -> "ChunkTranscriptArtifact":
+        """Load a chunk transcript artifact from disk."""
+        from dossier.storage import load_file
+
+        path = cls.workspace_path_static(recording_id) / "transcripts" / processing_id / f"{chunk_id}.json"
+
+        return load_file(path, cls)
 
 
 class TranscriptArtifact(Artifact):
@@ -119,3 +137,12 @@ class TranscriptArtifact(Artifact):
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
         return self.workspace_path() / "transcript.json"
+
+    @classmethod
+    def load(cls, recording_id: str) -> "TranscriptArtifact":
+        """Load a final merged transcript artifact from disk."""
+        from dossier.storage import load_file
+
+        path = cls.workspace_path_static(recording_id) / "transcript.json"
+
+        return load_file(path, cls)

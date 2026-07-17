@@ -52,3 +52,12 @@ class ChunkManifestArtifact(Artifact):
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
         return self.workspace_path() / "chunks" / self.chunking.id / "manifest.json"
+
+    @classmethod
+    def load(cls, recording_id: str, chunking_id: str) -> "ChunkManifestArtifact":
+        """Load a chunk manifest artifact from disk."""
+        from dossier.storage import load_file
+
+        path = cls.workspace_path_static(recording_id) / "chunks" / chunking_id / "manifest.json"
+
+        return load_file(path, cls)
