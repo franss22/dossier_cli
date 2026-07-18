@@ -9,13 +9,14 @@ from pydantic import BaseModel
 
 from dossier.artifact.base import ArtifactMetadata
 from dossier.artifact.chunks import ChunkMetadata, ChunkSetArtifact, TrackChunkManifest
-from dossier.artifact.transcript import (
+from dossier.artifact.transcripts import (
     ChunkTranscriptArtifact,
     ChunkTranscriptionState,
     TranscriptionRun,
     TranscriptionRunArtifact,
     TranscriptTrack,
 )
+from dossier.artifact.transcripts.run import DecoderConfiguration
 from dossier.utils.dir import REPO_ROOT
 from dossier.utils.types import _UNSET, _Unset
 
@@ -54,6 +55,8 @@ class Transcriber(ABC):
     language: str | None = None
     prompt: Path | None = None
 
+    backend_name: str = "base"
+
     def __init__(
         self,
         *,
@@ -67,10 +70,12 @@ class Transcriber(ABC):
     ) -> None:
         self.transcription = TranscriptionRun.create(
             stage="transcription",
-            model=model,
-            device=device,
-            compute_type=compute_type,
-            language=language,
+            decoder=DecoderConfiguration(
+                backend=self.backend_name,
+                model=model,
+                device=device,
+                compute_type=compute_type,
+            ),
         )
         self.on_progress = progress_callback
         self._progress_state = TranscriptionProgress(

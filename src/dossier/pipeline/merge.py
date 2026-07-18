@@ -1,7 +1,7 @@
 """Merge chunked transcription into a final transcript."""
 
 from dossier.artifact.recording import RecordingArtifact
-from dossier.artifact.transcript import (
+from dossier.artifact.transcripts import (
     MergedTranscriptArtifact,
     TranscriptionRunArtifact,
     TranscriptSegment,

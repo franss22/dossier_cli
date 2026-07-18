@@ -9,7 +9,7 @@ from rich.table import Table
 
 from dossier.artifact.chunks import ChunkSetArtifact
 from dossier.artifact.index import IndexController
-from dossier.artifact.transcript import TranscriptionRunArtifact
+from dossier.artifact.transcripts import TranscriptionRunArtifact
 from dossier.ui import select_chunkset
 from dossier.utils.config import get_config
 from dossier.utils.types import _UNSET

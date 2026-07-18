@@ -1,25 +1,93 @@
 """Faster Whisper transcriber."""
 
-from pathlib import Path
+from __future__ import annotations
 
+import statistics
+from time import perf_counter, process_time
+from typing import TYPE_CHECKING, Any
+
+import faster_whisper
 from faster_whisper import WhisperModel
 
-from dossier.artifact.chunks import ChunkMetadata
-from dossier.artifact.transcript import (
+from dossier.artifact.transcripts import (
     ChunkTranscriptArtifact,
     TranscriptSegment,
+)
+from dossier.artifact.transcripts.chunk import (
+    ChunkDebugInfo,
+    ChunkSource,
+    ChunkTranscriptMetrics,
+)
+from dossier.artifact.transcripts.segment import (
+    RawDecoderOutput,
+    TranscriptWord,
 )
 from dossier.transcriber.transcriber import (
     Transcriber,
     TranscriptionProgressCallback,
 )
+from dossier.utils.ffmpeg import FFMPEG_VERSION
+from dossier.utils.serializing import jsonable_object
 from dossier.utils.types import _UNSET, _Unset
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
+
+    from faster_whisper.transcribe import Segment, TranscriptionInfo, Word
+
+    from dossier.artifact.chunks import ChunkMetadata
+
+VERSIONS = {
+    "faster_whisper": faster_whisper.__version__,
+    "ffmpeg": FFMPEG_VERSION,
+}
 
 
 class FasterWhisperTranscriber(Transcriber):
-    """Transcriber implementation using the Faster Whisper model."""
+    """Transcriber implementation using Faster-Whisper."""
 
     model: WhisperModel
+
+    backend_name = "faster_whisper"
+
+    # Current chunk
+    _chunk: ChunkMetadata
+    _track_id: str
+
+    # Decoder output
+    _raw_segments: list[Segment]
+    _info: TranscriptionInfo
+
+    # Derived
+    _transcript_segments: list[TranscriptSegment]
+
+    # Statistics
+    _avg_logprobs: list[float]
+    _compression_ratios: list[float]
+    _no_speech_probs: list[float]
+    _speech_duration: float
+
+    # Timing
+    _wall_start: float
+    _wall_end: float
+    _cpu_start: float
+    _cpu_end: float
+
+    @property
+    def _processing_time(self) -> float:
+        """Total wall-clock time spent processing the chunk."""
+        return self._wall_end - self._wall_start
+
+    @property
+    def _cpu_time(self) -> float:
+        """Total CPU time spent processing the chunk."""
+        return self._cpu_end - self._cpu_start
+
+    @property
+    def _realtime_factor(self) -> float:
+        """Realtime factor of the chunk processing."""
+        return self._processing_time / self._chunk.duration
 
     def __init__(
         self,
@@ -53,31 +121,81 @@ class FasterWhisperTranscriber(Transcriber):
         chunk: ChunkMetadata,
         track_id: str,
     ) -> ChunkTranscriptArtifact:
-        """
-        Transcribe a single audio chunk.
+        """Transcribe a single audio chunk."""
+        self._chunk = chunk
+        self._track_id = track_id
 
-        Whisper timestamps are relative to the chunk.
-        Convert them back into recording timestamps.
-        """
-        prompt_text = self.prompt.read_text(encoding="utf-8") if self.prompt else None
-
-        segments, _info = self.model.transcribe(
+        kwargs = self._transcribe_kwargs()
+        self._wall_start = perf_counter()
+        self._cpu_start = process_time()
+        segments, info = self.model.transcribe(
             str(chunk.full_path(self.chunkset.chunking_path(), track_id)),
-            language=self.language,
-            initial_prompt=prompt_text,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 300},
-            beam_size=3,
-            condition_on_previous_text=False,
-            hallucination_silence_threshold=1.0,
+            **kwargs,
+        )
+        self._wall_end = perf_counter()
+        self._cpu_end = process_time()
+        self._raw_segments = list(segments)
+        self._info = info
+
+        transcript_segments = self._build_segments(
+            chunk=chunk,
+            track_id=track_id,
+            segments=segments,
+        )
+        self._transcript_segments = transcript_segments
+
+        return ChunkTranscriptArtifact(
+            metadata=self.artifact_metadata,
+            track_id=track_id,
+            chunk_id=chunk.id,
+            chunk_index=chunk.index,
+            transcription=self.transcription,
+            decoder=self.transcription.decoder.model_copy(
+                deep=True,
+                update={
+                    "configured_options": kwargs,
+                    "runtime_options": jsonable_object(
+                        info,
+                        exclude={"segments", "words"},
+                    ),
+                },
+            ),
+            source=self._build_chunk_source(),
+            metrics=self._build_metrics(),
+            diagnostics=self._build_diagnostics(),
+            segments=transcript_segments,
         )
 
-        print(_info)
+    def _transcribe_kwargs(self) -> dict[str, Any]:
+        """Build FasterWhisper transcription options."""
+        prompt = self.prompt.read_text("utf-8") if self.prompt else None
 
+        return {
+            "language": self.language,
+            "initial_prompt": prompt,
+            "vad_filter": True,
+            "vad_parameters": {
+                "min_silence_duration_ms": 300,
+            },
+            "beam_size": 2,
+            "condition_on_previous_text": False,
+            "hallucination_silence_threshold": 2.0,
+            "word_timestamps": True,
+        }
+
+    def _build_segments(
+        self,
+        *,
+        chunk: ChunkMetadata,
+        track_id: str,
+        segments: Iterable[Segment],
+    ) -> list[TranscriptSegment]:
+        """Convert FasterWhisper segments into transcript segments."""
         transcript_segments: list[TranscriptSegment] = []
 
         for segment in segments:
             text = segment.text.strip()
+
             if not text:
                 continue
 
@@ -90,14 +208,74 @@ class FasterWhisperTranscriber(Transcriber):
                     chunk_id=chunk.id,
                     chunk_index=chunk.index,
                     transcription_id=self.transcription.id,
+                    raw_decoder_output=RawDecoderOutput(
+                        data=jsonable_object(
+                            segment,
+                            exclude={"words"},
+                        )
+                    ),
+                    words=[self._build_word(chunk.start, word) for word in (segment.words or [])],
                 )
             )
 
-        return ChunkTranscriptArtifact(
-            metadata=self.artifact_metadata,
-            track_id=track_id,
-            chunk_id=chunk.id,
-            chunk_index=chunk.index,
-            transcription=self.transcription,
-            segments=transcript_segments,
+        return transcript_segments
+
+    @staticmethod
+    def _build_word(
+        chunk_start: float,
+        word: Word,
+    ) -> TranscriptWord:
+        """Convert a FasterWhisper word."""
+        return TranscriptWord(
+            start=chunk_start + word.start,
+            end=chunk_start + word.end,
+            word=word.word,
+            probability=word.probability,
+        )
+
+    def _build_metrics(self) -> ChunkTranscriptMetrics:
+        """Compute chunk-level transcription metrics."""
+        decoder_outputs = [
+            s.raw_decoder_output.data for s in self._transcript_segments if s.raw_decoder_output is not None
+        ]
+
+        logprobs = [d["avg_logprob"] for d in decoder_outputs if d.get("avg_logprob") is not None]
+
+        compression = [d["compression_ratio"] for d in decoder_outputs if d.get("compression_ratio") is not None]
+
+        no_speech = [d["no_speech_prob"] for d in decoder_outputs if d.get("no_speech_prob") is not None]
+
+        raw_segment_count = len(self._raw_segments)
+        return ChunkTranscriptMetrics(
+            raw_segment_count=raw_segment_count,
+            kept_segment_count=len(self._transcript_segments),
+            discarded_segment_count=raw_segment_count - len(self._transcript_segments),
+            speech_duration=sum(segment.duration for segment in self._transcript_segments),
+            average_logprob=(statistics.fmean(logprobs) if logprobs else None),
+            worst_logprob=(min(logprobs) if logprobs else None),
+            max_compression_ratio=(max(compression) if compression else None),
+            average_no_speech_probability=(statistics.fmean(no_speech) if no_speech else None),
+            cpu_time=self._cpu_time,
+            processing_time=self._processing_time,
+            realtime_factor=self._realtime_factor,
+        )
+
+    def _build_diagnostics(self) -> ChunkDebugInfo:
+        """Build diagnostic metadata."""
+        return ChunkDebugInfo(
+            versions=VERSIONS,
+            transcription_info=jsonable_object(self._info, exclude={"segments", "words"}),
+        )
+
+    def _build_chunk_source(
+        self,
+    ) -> ChunkSource:
+        """Build source metadata."""
+        return ChunkSource(
+            track_id=self._track_id,
+            chunk_id=self._chunk.id,
+            chunk_index=self._chunk.index,
+            start=self._chunk.start,
+            end=self._chunk.end,
+            duration=self._chunk.end - self._chunk.start,
         )

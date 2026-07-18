@@ -94,3 +94,7 @@ def duration(input_file: os.PathLike[str]) -> float:
         str(input_file),
     )
     return float(result.stdout.decode().strip())
+
+
+FFMPEG_VERSION = run_ffmpeg("-version").stdout.decode().splitlines()[0]
+FFPROBE_VERSION = run_ffprobe("-version").stdout.decode().splitlines()[0]

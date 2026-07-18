@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from dossier.artifact.transcript import (
+from dossier.artifact.transcripts import (
     ChunkTranscriptArtifact,
     TranscriptionRunArtifact,
     TranscriptSegment,
 )
+from dossier.artifact.transcripts.chunk import ChunkSource
 from dossier.transcriber.transcriber import Transcriber, TranscriptionProgressCallback
 from dossier.utils.types import _UNSET, _Unset
 
@@ -106,6 +107,7 @@ class MockTranscriber(Transcriber):
     """Mock transcriber for testing transcription pipelines."""
 
     recording: MockRecording
+    backend_name: str = "mock"
 
     def __init__(
         self,
@@ -171,6 +173,15 @@ class MockTranscriber(Transcriber):
             chunk_index=chunk.index,
             transcription=self.transcription,
             segments=segments,
+            decoder=self.transcription.decoder,
+            source=ChunkSource(
+                track_id=track_id,
+                chunk_id=chunk.id,
+                chunk_index=chunk.index,
+                start=chunk.start,
+                end=chunk.end,
+                duration=chunk.end - chunk.start,
+            ),
         )
 
 

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from dossier.artifact.chunks import ChunkSetArtifact
-from dossier.artifact.transcript import TranscriptionRunArtifact
+from dossier.artifact.transcripts import TranscriptionRunArtifact
 from dossier.ui import transcription_progress_bar
 from dossier.utils.types import _UNSET, _Unset
 

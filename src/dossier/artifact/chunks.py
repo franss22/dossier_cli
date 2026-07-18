@@ -19,6 +19,11 @@ class ChunkMetadata(BaseModel):
     file: str
 
     @property
+    def duration(self) -> float:
+        """Duration of the chunk in seconds."""
+        return self.end - self.start
+
+    @property
     def path(self) -> Path:
         """Relative path to the chunk audio file."""
         return Path(self.file)
