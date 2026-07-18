@@ -59,7 +59,8 @@ def create_recording_directory(
 
     (recording_dir / "audio").mkdir(exist_ok=True)
     (recording_dir / "chunks").mkdir(exist_ok=True)
-    (recording_dir / "transcripts").mkdir(exist_ok=True)
+    (recording_dir / "transcriptions").mkdir(exist_ok=True)
+    (recording_dir / "merged_transcriptions").mkdir(exist_ok=True)
 
     return recording_dir
 

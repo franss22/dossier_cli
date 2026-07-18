@@ -55,7 +55,7 @@ recordings/
     │           ├── chunk_000.wav
     │           └── chunk_001.wav
     │
-    ├── transcripts/
+    ├── transcriptions/
     │   └── chunk_000/
     │       ├── processing_001.json
     │       └── processing_002.json
@@ -105,7 +105,7 @@ Artifact
     │       └── chunks/{chunking_id}/manifest.json
     │
     ├── ChunkTranscriptArtifact
-    │       └── transcripts/{chunk_id}/{processing_id}.json
+    │       └── transcriptions/{chunk_id}/{processing_id}.json
     │
     └── TranscriptArtifact
             └── transcript.json

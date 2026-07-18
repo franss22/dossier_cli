@@ -41,3 +41,12 @@ class Segment:
 
 
 TranscribedChunk = list[Segment]
+
+
+class _Unset:
+    """Sentinel value for unset parameters."""
+
+    pass
+
+
+_UNSET = _Unset()

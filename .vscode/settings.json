@@ -19,5 +19,14 @@
   },
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff"
-  }
+  },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "always"
+  },
+  "python.analysis.packageIndexDepths": [
+    {
+      "name": "anyio",
+      "depth": 0
+    }
+  ]
 }

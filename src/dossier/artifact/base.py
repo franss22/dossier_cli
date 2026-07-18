@@ -5,10 +5,10 @@ Artifacts are persisted objects that represent the state of a recording at a giv
 
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 from dossier.utils.dir import RECORDINGS_DIR
 
@@ -58,6 +58,12 @@ class Artifact(VersionedModel, ABC):
             ~/.dossier/recordings/rec_001/
         """
         return self.workspace_path_static(self.metadata.recording_id)
+
+    def save(self) -> None:
+        """Save this artifact to disk."""
+        from dossier.utils.storage import save_file
+
+        save_file(self)
 
     @abstractmethod
     def storage_path(self) -> Path:

@@ -1,11 +1,13 @@
 """Index artifact for tracking all recordings/workspaces."""
 
-from datetime import datetime, UTC
+import secrets
+from datetime import UTC, datetime
+from pathlib import Path
 
 from pydantic import BaseModel, Field
+from slugify import slugify
 
 from dossier.artifact.base import VersionedModel
-from pathlib import Path
 from dossier.artifact.recording import RecordingArtifact
 from dossier.utils.dir import RECORDINGS_DIR
 
@@ -49,7 +51,7 @@ class Index(VersionedModel):
     @classmethod
     def load(cls) -> "Index":
         """Load the index artifact from disk."""
-        from dossier.storage import load_file
+        from dossier.utils.storage import load_file
 
         path = RECORDINGS_DIR / "index.json"
 
@@ -76,11 +78,11 @@ class IndexController:
 
     def save_index(self) -> None:
         """Save the index artifact to disk."""
-        from dossier.storage import save_file
+        from dossier.utils.storage import save_file
 
         save_file(self.index)
 
-    def get_recording(self, id_or_alias: str) -> WorkspaceEntry | None:
+    def _get_recording(self, id_or_alias: str) -> WorkspaceEntry | None:
         """Retrieve a recording entry by ID or alias."""
         recording_id = self.index.aliases.get(id_or_alias)
         if recording_id is None:
@@ -90,11 +92,11 @@ class IndexController:
                 return entry
         return None
 
-    def get_recording_artifact(self, id_or_alias: str) -> RecordingArtifact | None:
+    def get_recording(self, id_or_alias: str) -> RecordingArtifact:
         """Retrieve the recording artifact by ID or alias."""
-        recording_entry = self.get_recording(id_or_alias)
+        recording_entry = self._get_recording(id_or_alias)
         if recording_entry is None:
-            return None
+            raise ValueError(f"Recording '{id_or_alias}' not found in index.")
         return RecordingArtifact.load(recording_entry.id)
 
     def add_recording(self, recording_id: str, name: str, aliases: list[str] | None = None) -> None:
@@ -118,3 +120,13 @@ class IndexController:
         """Remove a recording from the index."""
         self.index.recordings = [entry for entry in self.index.recordings if entry.id != recording_id]
         self.index.rebuild_alias_index()
+        self.save_index()
+
+
+def generate_recording_id(name: str) -> str:
+    """Generate a unique ID for the recording, still human readable and relevant to the workspace name."""
+    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    slug = slugify(name, word_boundary=True, max_length=40)
+    suffix = secrets.token_hex(3)
+
+    return f"{slug}_{date}_{suffix}"

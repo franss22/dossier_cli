@@ -1,11 +1,11 @@
 # config.toml
 [audio]
-chunk_minutes = 20
-overlap_seconds = 60
+chunk_minutes = 25
+overlap_seconds = 300
 sample_rate = 16000
 
 [transcription]
-model_size = "medium"
+model_size = "large-v3"
 language = "es"
 device = "cpu"
 compute_type = "int8"

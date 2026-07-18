@@ -4,9 +4,8 @@ from pathlib import Path
 
 from faster_whisper import WhisperModel
 
-from dossier.audio import AudioChunk
 from dossier.utils.dir import REPO_ROOT
-from dossier.utils.types import Segment, TranscribedChunk
+from dossier.utils.types import AudioChunk, Segment, TranscribedChunk
 
 PROMPT = REPO_ROOT / "transcription_prompt.md"
 

@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
+import functools
+import tomllib
 from copy import deepcopy
 from dataclasses import dataclass, field
-import functools
 from pathlib import Path
-import tomllib
-from typing import Any
-
+from typing import Any, get_type_hints
 
 from dossier.utils.dir import REPO_ROOT
-from typing import get_type_hints
 
 
 @dataclass(slots=True)
@@ -122,6 +120,18 @@ def build_config_map() -> dict[str, tuple[str, str]]:
 def config_map() -> dict[str, tuple[str, str]]:
     """Return a cached mapping of CLI/config keys to (section, field)."""
     return build_config_map()
+
+
+def refresh_config_cache() -> None:
+    """Clear the cached AppConfig instance and the config map."""
+    get_config.cache_clear()
+    config_map.cache_clear()
+
+
+@functools.cache
+def get_config() -> AppConfig:
+    """Return a cached AppConfig instance loaded from the TOML file."""
+    return load_config()
 
 
 def load_config(config_path: str | Path = CONFIG_PATH) -> AppConfig:

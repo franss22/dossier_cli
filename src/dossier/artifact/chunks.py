@@ -4,7 +4,6 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from dossier.artifact.audio import AudioMetadata
 from dossier.artifact.base import Artifact
 
 
@@ -24,6 +23,15 @@ class ChunkMetadata(BaseModel):
         """Relative path to the chunk audio file."""
         return Path(self.file)
 
+    @classmethod
+    def build_id(cls, track_id: str, index: int) -> str:
+        """Build a chunk ID from a track ID and index."""
+        return f"{track_id}/{index:03d}"
+
+    def full_path(self, chunking_path: Path, track_id: str) -> Path:
+        """Absolute path to the chunk audio file."""
+        return chunking_path / track_id / self.path
+
 
 class TrackChunkManifest(BaseModel):
     """Chunk manifest for one audio track."""
@@ -32,16 +40,21 @@ class TrackChunkManifest(BaseModel):
     chunks: list[ChunkMetadata]
 
 
-class ChunkingConfiguration(BaseModel):
+class ChunkSetConfiguration(BaseModel):
     """Parameters used to generate audio chunks."""
 
     id: str
 
-    duration_seconds: float
-    overlap_seconds: float
+    duration_seconds: int
+    overlap_seconds: int
+
+    @classmethod
+    def build_id(cls, duration_mins: int, overlap_seconds: int) -> str:
+        """Build a chunking configuration ID from duration and overlap."""
+        return f"chunkset_{duration_mins:.0f}min_{overlap_seconds:.0f}s"
 
 
-class ChunkManifestArtifact(Artifact):
+class ChunkSetArtifact(Artifact):
     """
     Manifest describing all chunks generated for a recording.
 
@@ -60,18 +73,17 @@ class ChunkManifestArtifact(Artifact):
         ...
     """
 
-    audio: AudioMetadata
-    chunking: ChunkingConfiguration
+    chunk_run: ChunkSetConfiguration
 
     tracks: list[TrackChunkManifest]
 
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
-        return self.workspace_path() / "chunks" / self.chunking.id / "manifest.json"
+        return self.workspace_path() / "chunks" / self.chunk_run.id / "manifest.json"
 
     def chunking_path(self) -> Path:
         """Root directory for this chunking operation."""
-        return self.workspace_path() / "chunks" / self.chunking.id
+        return self.workspace_path() / "chunks" / self.chunk_run.id
 
     def track_directory(self, track_id: str) -> Path:
         """Directory containing all chunks for one track."""
@@ -102,14 +114,31 @@ class ChunkManifestArtifact(Artifact):
         return self.chunk_relative_path(track_id, chunk_id).as_posix()
 
     @classmethod
+    def list(cls, recording_id: str) -> list["ChunkSetArtifact"]:
+        """List all chunk set artifacts for a given recording."""
+        directory = cls.workspace_path_static(recording_id) / "chunks"
+
+        if not directory.exists():
+            return []
+
+        return sorted(
+            [
+                cls.load(recording_id, folder.name)
+                for folder in directory.iterdir()
+                if folder.is_dir() and (folder / "manifest.json").exists()
+            ],
+            key=lambda artifact: artifact.chunk_run.id,
+        )
+
+    @classmethod
     def load(
         cls,
         recording_id: str,
-        chunking_id: str,
-    ) -> "ChunkManifestArtifact":
+        chunkset_id: str,
+    ) -> "ChunkSetArtifact":
         """Load a chunk manifest artifact from disk."""
-        from dossier.storage import load_file
+        from dossier.utils.storage import load_file
 
-        path = cls.workspace_path_static(recording_id) / "chunks" / chunking_id / "manifest.json"
+        path = cls.workspace_path_static(recording_id) / "chunks" / chunkset_id / "manifest.json"
 
         return load_file(path, cls)

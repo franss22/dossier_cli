@@ -3,66 +3,21 @@
 Processes a recording into a normalized audio format and saves it to a newly created recording workspace.
 """
 
-from datetime import datetime, UTC
-from pathlib import Path
-import secrets
-from typing import Any
-from dossier.artifact.base import ArtifactMetadata
-from dossier.artifact.index import IndexController
-from dossier.storage import create_recording_directory, save_file
-from dossier.artifact.recording import RecordingArtifact, RecordingMetadata, RecordingSource
-from orjson import loads as json_loads
-from dossier.utils.dir import RECORDINGS_DIR, calculate_sha256
-from dossier.utils.ffmpeg import run_ffmpeg, run_ffprobe
-from dossier.utils.types import AudioStream
 import zipfile
+from datetime import UTC, datetime
+from pathlib import Path
 from tempfile import TemporaryDirectory
-from slugify import slugify
+from typing import Any
 
+from orjson import loads as json_loads
 
-def generate_recording_id(name: str) -> str:
-    """Generate a unique ID for the recording, still human readable and relevant to the workspace name."""
-    date = datetime.now(UTC).strftime("%Y-%m-%d")
-    slug = slugify(name, word_boundary=True, max_length=40)
-    suffix = secrets.token_hex(3)
-
-    return f"{slug}_{date}_{suffix}"
-
-
-def create_recording_artifact(
-    input_file: Path,
-    rec_id: str,
-    workspace_name: str | None,
-    tracks: list[Path],
-) -> RecordingArtifact:
-    """
-    Create a recording artifact from an imported recording.
-
-    Args:
-        input_file: Original recording file.
-        rec_id: Recording ID.
-        workspace_name: Optional human-readable name.
-        tracks: Generated normalized audio tracks.
-
-    Returns:
-        A populated RecordingArtifact.
-    """
-    workspace_path = RECORDINGS_DIR / rec_id
-
-    return RecordingArtifact(
-        recording=RecordingMetadata(
-            id=rec_id,
-            name=workspace_name,
-        ),
-        source=RecordingSource(
-            filename=input_file.name,
-            size_bytes=input_file.stat().st_size,
-            sha256=calculate_sha256(input_file),
-            original_path=str(input_file),
-        ),
-        tracks=[str(track.relative_to(workspace_path)) for track in tracks],
-        metadata=ArtifactMetadata(recording_id=rec_id, created_at=datetime.now(UTC)),
-    )
+from dossier.artifact.base import ArtifactMetadata
+from dossier.artifact.index import IndexController, generate_recording_id
+from dossier.artifact.recording import AudioMetadata, AudioTrack, RecordingArtifact, RecordingMetadata, RecordingSource
+from dossier.utils.dir import RECORDINGS_DIR, calculate_sha256
+from dossier.utils.ffmpeg import duration, run_ffmpeg, run_ffprobe
+from dossier.utils.storage import create_recording_directory
+from dossier.utils.types import AudioStream
 
 
 def ingest_recording(
@@ -107,9 +62,58 @@ def ingest_recording(
         workspace_name=workspace_name,
         tracks=tracks,
     )
-    save_file(artifact)
+    artifact.save()
 
     return artifact
+
+
+def create_recording_artifact(
+    input_file: Path,
+    rec_id: str,
+    workspace_name: str | None,
+    tracks: list[Path],
+) -> RecordingArtifact:
+    """
+    Create a recording artifact from an imported recording.
+
+    Args:
+        input_file: Original recording file.
+        rec_id: Recording ID.
+        workspace_name: Optional human-readable name.
+        tracks: Generated normalized audio tracks.
+
+    Returns:
+        A populated RecordingArtifact.
+    """
+    workspace_path = RECORDINGS_DIR / rec_id
+
+    return RecordingArtifact(
+        recording=RecordingMetadata(
+            id=rec_id,
+            name=workspace_name,
+        ),
+        source=RecordingSource(
+            filename=input_file.name,
+            size_bytes=input_file.stat().st_size,
+            sha256=calculate_sha256(input_file),
+            original_path=input_file.as_posix(),
+        ),
+        metadata=ArtifactMetadata(recording_id=rec_id, created_at=datetime.now(UTC)),
+        audio=AudioMetadata(
+            recording_duration=max(duration(track) for track in tracks),
+            sample_rate=16000,
+            tracks=[
+                AudioTrack(
+                    id=track.stem,
+                    file=track.relative_to(workspace_path).as_posix(),
+                    channels=1,
+                    duration=duration(track),
+                    sample_rate=16000,
+                )
+                for track in tracks
+            ],
+        ),
+    )
 
 
 def import_mkv(
@@ -210,17 +214,17 @@ def convert_to_wav(
 
     run_ffmpeg(
         "-i",
-        str(input_file),
+        input_file,
         "-map",
         f"0:a:{stream}",  # Map the specified audio stream
         "-ar",  # Set the audio sample rate
-        str(sample_rate),
+        sample_rate,
         "-vn",  # No video
         "-ac",  # Set the number of audio channels
-        str(channels),
+        channels,
         "-c:a",  # Set the audio codec
         "pcm_s16le",
-        str(output_file),
+        output_file,
     )
     return output_file
 
@@ -236,7 +240,7 @@ def probe_audio_streams(input_file: Path) -> list[AudioStream]:
         "stream=index,codec_name,sample_rate,channels",
         "-of",
         "json",
-        str(input_file),
+        input_file,
     )
 
     data: dict[str, Any] = json_loads(result.stdout)
@@ -261,7 +265,7 @@ def probe_duration(input_file: Path) -> float:
         "format=duration",
         "-of",
         "json",
-        str(input_file),
+        input_file,
     )
 
     data = json_loads(result.stdout)

@@ -9,6 +9,7 @@ dependencies = [
     "orjson>=3.11.9",
     "pydantic>=2.13.4",
     "python-slugify>=8.0.4",
+    "questionary>=2.1.1",
     "rich>=15.0.0",
     "torch>=2.8.0",
     "torchaudio>=2.8.0",
@@ -43,6 +44,7 @@ select = [
     "SIM", # flake8-simplify
     "RUF", # Ruff-specific rules
     "TC",  # type-checking rules
+    "I",   # isort rules
 ]
 
 # Ignore specific rules that might be too strict

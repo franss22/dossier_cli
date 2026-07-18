@@ -1,11 +1,12 @@
 # Context
 
-This is a recording of a Delta Green campaign in Chilean Spanish.
-Players frequently switch between Spanish and English RPG terminology.
+Esta es una sesión de Delta Green en español chileno. 
+Puede contener términos en inglés como Drawing, NPC, Delta Green, roll y nombres propios. 
+Transcribe exactamente lo que se dice; no traduzcas al inglés.
 
 ---
 
-# Campaign
+# Campaña
 
 - Delta Green
 - Impossible Landscapes
@@ -15,9 +16,9 @@ Players frequently switch between Spanish and English RPG terminology.
 
 ---
 
-# Game terminology
+# Terminología de juego
 
-## Skills
+## Habilidades
 
 - Alertness
 - Humint
@@ -32,7 +33,7 @@ Players frequently switch between Spanish and English RPG terminology.
 - Unnatural
 - Forensics
 
-## Mechanics
+## Mecánicas
 
 - SAN/Sanity
 - Willpower
@@ -41,7 +42,7 @@ Players frequently switch between Spanish and English RPG terminology.
 
 ---
 
-# Important NPCs:
+# NPCs Importantes:
 - Abigail Wright
 - Agent Marcus (Marvin Bloom)
 - Graham Giuradanda
@@ -52,14 +53,14 @@ Players frequently switch between Spanish and English RPG terminology.
 - Louis Post
 - Henri de Calvados Castaigne
 
-# Player characters:
+# Personajes de los Jugadores:
 - Mastiff (Demian Miller)
 - May (Helen Blackwell)
 - Mishima (Beatrice Martinez)
 - Morgan (Michael Wilde)
 - Moriarty (Sir Percival Archibald Thurston)
 
-#Player names:
+# Nombres de los Jugadores:
 
 - Taco
 - Coni
@@ -71,7 +72,8 @@ Players frequently switch between Spanish and English RPG terminology.
 
 # Style
 
-- Preserve English game terms if spoken in English.
-- Preserve names exactly.
-- Do not translate English RPG terminology into Spanish.
-- The conversation is informal Chilean Spanish.
+- Manten los terminos de juego en inglés si son mencionados en inglés
+- Mantén los nombres exactamente
+- No traduzcas Terminología de RPG en inglés al español
+- La conversación está en español chileno informal
+

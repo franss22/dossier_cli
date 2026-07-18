@@ -1,8 +1,8 @@
 """Utility functions for directory management."""
 
+import hashlib
 from datetime import datetime
 from pathlib import Path
-import hashlib
 
 REPO_ROOT = Path(__file__).parents[3].absolute()
 """Absolute path to the root of the repository"""
