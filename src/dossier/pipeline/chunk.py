@@ -21,26 +21,33 @@ chunks/
 """
 
 import math
-from datetime import UTC, datetime
 
 from rich.progress import Progress
 
-from dossier.artifact.base import ArtifactMetadata
-from dossier.artifact.chunks import ChunkMetadata, ChunkSetArtifact, ChunkSetConfiguration, TrackChunkManifest
+from dossier.artifact.base import FileMetadata
+from dossier.artifact.chunks import (
+    ChunkingMode,
+    ChunkMetadata,
+    ChunkSetArtifact,
+    ChunkSetConfiguration,
+    TrackChunkManifest,
+)
 from dossier.artifact.recording import AudioTrack, RecordingArtifact
 from dossier.utils.ffmpeg import segment
 
 
-def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int) -> ChunkSetArtifact:
+def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int, mode: ChunkingMode) -> ChunkSetArtifact:
     """Split all tracks of a recording into overlapping chunks."""
+    if mode == ChunkingMode.SPLIT or mode == ChunkingMode.FULL:
+        overlap_seconds = 0
+    if mode == ChunkingMode.FULL:
+        chunk_minutes = -1
     # Define chunking id
-    chunking_id = ChunkSetConfiguration.build_id(chunk_minutes, overlap_seconds)
+    chunking_id = ChunkSetConfiguration.build_id(chunk_minutes, overlap_seconds, mode)
     # Load recording artifact
     rec = RecordingArtifact.load(rec_id)
     chunk_config = ChunkSetConfiguration(
-        id=chunking_id,
-        duration_seconds=chunk_minutes * 60,
-        overlap_seconds=overlap_seconds,
+        id=chunking_id, duration_seconds=chunk_minutes * 60, overlap_seconds=overlap_seconds, mode=mode
     )
     # For each track, split into chunks
     chunk_manifests: list[TrackChunkManifest] = []
@@ -57,7 +64,7 @@ def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int) -> Ch
         chunk_manifests.append(manifest)
 
     manifest_artifact = ChunkSetArtifact(
-        metadata=ArtifactMetadata(recording_id=rec_id, created_at=datetime.now(UTC)),
+        metadata=FileMetadata.new(recording_id=rec_id),
         chunk_run=chunk_config,
         tracks=chunk_manifests,
     )
@@ -65,37 +72,72 @@ def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int) -> Ch
     return manifest_artifact
 
 
+def build_chunk_ranges(
+    track: AudioTrack,
+    chunk_config: ChunkSetConfiguration,
+) -> list[tuple[float, float]]:
+    """Build a list of (start, end) tuples for each chunk of a track.
+
+    Modes:
+    - FULL: Do not split the audio, just transcribe the full track as one chunk.
+    - SPLIT: Split the audio into non-overlapping chunks. (overrides overlap to 0)
+    - OVERLAP: Split the audio into overlapping chunks.
+    """
+    match chunk_config.mode:
+        case ChunkingMode.FULL:
+            return [(0.0, track.duration)]
+
+        case ChunkingMode.SPLIT:
+            chunk_size = chunk_config.duration_seconds
+            step = chunk_size
+
+        case ChunkingMode.OVERLAP:
+            chunk_size = chunk_config.duration_seconds
+            step = chunk_size - chunk_config.overlap_seconds
+
+    ranges: list[tuple[float, float]] = []
+
+    for start in range(0, math.ceil(track.duration), step):
+        end = min(start + chunk_size, track.duration)
+        ranges.append((float(start), end))
+
+    return ranges
+
+
+def split_msg(chunk_config: ChunkSetConfiguration, track: AudioTrack) -> str:
+    """Build a message describing how the track will be split into chunks."""
+    match chunk_config.mode:
+        case ChunkingMode.FULL:
+            return f"Processing {track.id} as full track"
+
+        case ChunkingMode.SPLIT:
+            return f"Splitting {track.id} into {chunk_config.duration_seconds / 60:.2f}min chunks (no overlap)"
+
+        case ChunkingMode.OVERLAP:
+            return (
+                f"Splitting {track.id} into {chunk_config.duration_seconds / 60:.2f}min"
+                f" chunks with {chunk_config.overlap_seconds}s overlap"
+            )
+
+
 def split_track(
     track: AudioTrack,
     recording: RecordingArtifact,
     chunk_config: ChunkSetConfiguration,
 ) -> list[ChunkMetadata]:
-    """Split an audio track into overlapping WAV chunks."""
+    """Split an audio track according to the configured chunking mode."""
     output_dir = recording.workspace_path() / "chunks" / chunk_config.id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    chunk_seconds = chunk_config.duration_seconds
-    step_seconds = chunk_seconds - chunk_config.overlap_seconds
-
-    total_chunks = math.ceil(track.duration / step_seconds)
+    ranges = build_chunk_ranges(track, chunk_config)
+    total_chunks = len(ranges)
 
     chunks: list[ChunkMetadata] = []
 
     with Progress() as progress:
-        task = progress.add_task(
-            f"Splitting {track.id} into {chunk_seconds / 60:.2f}min chunks"
-            f" with {chunk_config.overlap_seconds}s overlap",
-            total=total_chunks,
-        )
+        task = progress.add_task(split_msg(chunk_config, track), total=total_chunks)
 
-        for index in range(total_chunks):
-            start = index * step_seconds
-
-            if start >= track.duration:
-                break
-
-            end = min(start + chunk_seconds, track.duration)
-
+        for index, (start, end) in enumerate(ranges):
             chunk_id = f"{track.id}/chunk_{index:03d}"
             output = output_dir / f"{chunk_id}.wav"
 

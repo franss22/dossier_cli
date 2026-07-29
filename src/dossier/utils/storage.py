@@ -6,20 +6,20 @@ objects.
 
 from pathlib import Path
 
-from dossier.artifact.base import Artifact
+from dossier.artifact.base import Artifact, StoredFile
 from dossier.artifact.index import Index
 from dossier.utils.dir import RECORDINGS_DIR
 
 
 def save_file(
-    artifact: Artifact | Index,
+    data: StoredFile,
 ) -> Path:
     """Save an artifact to disk."""
-    path = artifact.storage_path()
+    path = data.storage_path()
     path.parent.mkdir(parents=True, exist_ok=True)
 
     path.write_text(
-        artifact.model_dump_json(indent=2),
+        data.model_dump_json(indent=2),
         encoding="utf-8",
     )
     return path
@@ -60,7 +60,8 @@ def create_recording_directory(
     (recording_dir / "audio").mkdir(exist_ok=True)
     (recording_dir / "chunks").mkdir(exist_ok=True)
     (recording_dir / "transcriptions").mkdir(exist_ok=True)
-    (recording_dir / "merged_transcriptions").mkdir(exist_ok=True)
+    (recording_dir / "compiled_transcriptions").mkdir(exist_ok=True)
+    (recording_dir / "exports").mkdir(exist_ok=True)
 
     return recording_dir
 

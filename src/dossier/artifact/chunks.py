@@ -1,10 +1,22 @@
 """Chunk artifacts for audio processing."""
 
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from dossier.artifact.base import Artifact
+
+
+class ChunkingMode(StrEnum):
+    """Modes of splitting an audio into chunks."""
+
+    FULL = "full"
+    """Do not split the audio, just transcribe the full track as one chunk."""
+    SPLIT = "split"
+    """Split the audio into non-overlapping chunks. (overrides overlap to 0)"""
+    OVERLAP = "overlap"
+    """Split the audio into overlapping chunks."""
 
 
 class ChunkMetadata(BaseModel):
@@ -53,10 +65,18 @@ class ChunkSetConfiguration(BaseModel):
     duration_seconds: int
     overlap_seconds: int
 
+    mode: ChunkingMode
+
     @classmethod
-    def build_id(cls, duration_mins: int, overlap_seconds: int) -> str:
+    def build_id(cls, duration_mins: int, overlap_seconds: int, mode: ChunkingMode) -> str:
         """Build a chunking configuration ID from duration and overlap."""
-        return f"chunkset_{duration_mins:.0f}min_{overlap_seconds:.0f}s"
+        match mode:
+            case ChunkingMode.FULL:
+                return "chunkset_full"
+            case ChunkingMode.SPLIT:
+                return f"chunkset_split_{duration_mins:.0f}min"
+            case ChunkingMode.OVERLAP:
+                return f"chunkset_overlap_{duration_mins:.0f}min_{overlap_seconds:.0f}s"
 
 
 class ChunkSetArtifact(Artifact):
@@ -79,12 +99,15 @@ class ChunkSetArtifact(Artifact):
     """
 
     chunk_run: ChunkSetConfiguration
-
     tracks: list[TrackChunkManifest]
+
+    @classmethod
+    def _path(cls, recording_id: str, chunk_run_id: str) -> Path:
+        return cls.workspace_path_static(recording_id) / "chunks" / chunk_run_id / "manifest.json"
 
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
-        return self.workspace_path() / "chunks" / self.chunk_run.id / "manifest.json"
+        return self._path(self.metadata.recording_id, self.chunk_run.id)
 
     def chunking_path(self) -> Path:
         """Root directory for this chunking operation."""
@@ -142,8 +165,4 @@ class ChunkSetArtifact(Artifact):
         chunkset_id: str,
     ) -> "ChunkSetArtifact":
         """Load a chunk manifest artifact from disk."""
-        from dossier.utils.storage import load_file
-
-        path = cls.workspace_path_static(recording_id) / "chunks" / chunkset_id / "manifest.json"
-
-        return load_file(path, cls)
+        return super().load(recording_id, chunkset_id)

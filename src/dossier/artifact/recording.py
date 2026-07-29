@@ -62,9 +62,13 @@ class RecordingArtifact(Artifact):
     source: RecordingSource
     audio: AudioMetadata
 
+    @classmethod
+    def _path(cls, recording_id: str) -> Path:
+        return cls.workspace_path_static(recording_id) / "recording.json"
+
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
-        return self.workspace_path() / "recording.json"
+        return self._path(self.recording.id)
 
     def get_tracks(self) -> list[tuple[AudioTrack, Path]]:
         """Get the absolute paths to all tracks in this recording."""
@@ -73,11 +77,7 @@ class RecordingArtifact(Artifact):
     @classmethod
     def load(cls, recording_id: str) -> "RecordingArtifact":
         """Load a recording artifact from disk."""
-        from dossier.utils.storage import load_file
-
-        path = cls.workspace_path_static(recording_id) / "recording.json"
-
-        return load_file(path, cls)
+        return super().load(recording_id)
 
     @property
     def id(self) -> str:

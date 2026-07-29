@@ -42,11 +42,11 @@ class ChunkTranscriptMetrics(BaseModel):
     kept_segment_count: int = 0
     discarded_segment_count: int = 0
 
-    processing_time: float | None = None
-    cpu_time: float | None = None
-    realtime_factor: float | None = None
+    wall_time_seconds: float | None = None
+    cpu_time_seconds: float | None = None
+    processing_realtime_factor: float | None = None
 
-    speech_duration: float = 0.0
+    transcribed_speech_duration_seconds: float = 0.0
 
     average_logprob: float | None = None
     worst_logprob: float | None = None
@@ -55,7 +55,10 @@ class ChunkTranscriptMetrics(BaseModel):
 
     average_no_speech_probability: float | None = None
 
-    suspicious_segments: int = 0
+    # suspicious_segments: int | None = None
+
+    # peak_memory_mb: float | None = None
+    # process_memory_mb: float | None = None
 
 
 class ChunkDebugInfo(BaseModel):
@@ -92,11 +95,23 @@ class ChunkTranscriptArtifact(Artifact):
 
     segments: list[TranscriptSegment] = Field(default_factory=list)
 
+    @classmethod
+    def _path(
+        cls,
+        recording_id: str,
+        transcription_id: str,
+        chunk_id: str,
+    ) -> Path:
+        return (
+            cls.workspace_path_static(recording_id)
+            / "transcriptions"
+            / transcription_id
+            / f"{chunk_id}_chunk_transcript.json"
+        )
+
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
-        return (
-            self.workspace_path() / "transcriptions" / self.transcription.id / f"{self.chunk_id}_chunk_transcript.json"
-        )
+        return self._path(self.metadata.recording_id, self.transcription.id, self.chunk_id)
 
     @classmethod
     def load(
@@ -106,16 +121,7 @@ class ChunkTranscriptArtifact(Artifact):
         chunk_id: str,
     ) -> "ChunkTranscriptArtifact":
         """Load a chunk transcript artifact from disk."""
-        from dossier.utils.storage import load_file
-
-        path = (
-            cls.workspace_path_static(recording_id)
-            / "transcriptions"
-            / transcription_id
-            / f"{chunk_id}_chunk_transcript.json"
-        )
-
-        return load_file(path, cls)
+        return super().load(recording_id, transcription_id, chunk_id)
 
 
 ChunkTranscriptArtifact.model_rebuild()

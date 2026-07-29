@@ -78,15 +78,28 @@ class TranscriptionRunArtifact(Artifact):
 
     transcription: TranscriptionRun
 
-    merged: bool = False
+    compiled: bool = False
 
     started_at: datetime | None = None
 
     completed_at: datetime | None = None
 
+    @classmethod
+    def _path(
+        cls,
+        recording_id: str,
+        transcription_id: str,
+    ) -> Path:
+        return (
+            cls.workspace_path_static(recording_id)
+            / "transcriptions"
+            / transcription_id
+            / "transcription_manifest.json"
+        )
+
     def storage_path(self) -> Path:
         """Exact storage location."""
-        return self.workspace_path() / "transcriptions" / self.transcription.id / "transcription_manifest.json"
+        return self._path(self.metadata.recording_id, self.transcription.id)
 
     @classmethod
     def load(
@@ -95,16 +108,7 @@ class TranscriptionRunArtifact(Artifact):
         transcription_id: str,
     ) -> "TranscriptionRunArtifact":
         """Load transcription manifest."""
-        from dossier.utils.storage import load_file
-
-        path = (
-            cls.workspace_path_static(recording_id)
-            / "transcriptions"
-            / transcription_id
-            / "transcription_manifest.json"
-        )
-
-        return load_file(path, cls)
+        return super().load(recording_id, transcription_id)
 
     def get_track_chunks(
         self,
@@ -112,6 +116,27 @@ class TranscriptionRunArtifact(Artifact):
     ) -> dict[str, ChunkTranscriptionState]:
         """Get all chunks belonging to a track."""
         return {key: state for key, state in self.chunk_states.items() if key.startswith(f"{track_id}/")}
+
+    def load_track_chunks(
+        self,
+        track_id: str,
+    ) -> list[ChunkTranscriptArtifact]:
+        """Load all chunk transcript artifacts for a given track."""
+        chunk_states = self.get_track_chunks(track_id)
+
+        if any(not state.completed for state in chunk_states.values()):
+            raise ValueError(f"Cannot load track {track_id}: not all chunks are completed.")
+
+        return sorted(
+            (
+                state.load_chunk(
+                    recording_id=self.metadata.recording_id,
+                    transcription_id=self.transcription.id,
+                )
+                for state in chunk_states.values()
+            ),
+            key=lambda chunk: chunk.chunk_index,
+        )
 
     @classmethod
     def list(

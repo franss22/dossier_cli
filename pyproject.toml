@@ -79,4 +79,7 @@ indent-style = "space"
 line-ending = "auto"
 
 [dependency-groups]
-dev = ["ruff>=0.15.21"]
+dev = [
+    "icecream>=2.2.0",
+    "ruff>=0.15.21",
+]

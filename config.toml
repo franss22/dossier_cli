@@ -5,7 +5,7 @@ overlap_seconds = 300
 sample_rate = 16000
 
 [transcription]
-model_size = "large-v3"
+model_size = "large-v3-turbo"
 language = "es"
 device = "cpu"
 compute_type = "int8"

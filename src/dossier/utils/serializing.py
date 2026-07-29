@@ -38,12 +38,43 @@ def jsonable(value: Any) -> Any:
     return str(value)
 
 
-def jsonable_object(obj: Any, *, exclude: set[str] | None = None) -> dict[str, Any]:
-    """Serialize an object's public attributes to a JSON-serializable dict."""
+def jsonable_object(
+    obj: Any,
+    *,
+    exclude: set[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Serialize an object's public attributes to a JSON-serializable dict.
+
+    Supports nested exclusions using dot notation.
+
+    Example:
+        exclude={
+            "words",
+            "transcription_options.suppress_tokens",
+            "transcription_options.initial_prompt",
+            "decoder.some.deep.field",
+        }
+    """
     data = jsonable(vars(obj))
 
-    if exclude:
-        for field in exclude:
-            data.pop(field, None)
+    if not exclude:
+        return data
+
+    for path in exclude:
+        parts = path.split(".")
+        current = data
+
+        for key in parts[:-1]:
+            if not isinstance(current, dict):
+                break
+
+            current = current.get(key)
+
+            if current is None:
+                break
+        else:
+            if isinstance(current, dict):
+                current.pop(parts[-1], None)
 
     return data

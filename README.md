@@ -71,7 +71,7 @@ Support real-world tabletop recording setups.
     - [ ] Channel information
     - [ ] Speaker label
 - [ ] Transcribe tracks independently
-- [ ] Merge transcripts chronologically
+- [ ] Compile transcripts chronologically
 - [ ] Preserve speaker information
 
 Supported workflows:

@@ -1,5 +1,6 @@
 """Transcriber CLI entrypoint."""
 
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -7,10 +8,11 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from dossier.artifact.chunks import ChunkSetArtifact
+from dossier.artifact.chunks import ChunkingMode, ChunkSetArtifact
 from dossier.artifact.index import IndexController
 from dossier.artifact.transcripts import TranscriptionRunArtifact
-from dossier.ui import select_chunkset
+from dossier.pipeline.export import ExportMode, export_transcription
+from dossier.ui import select_chunkset, select_transcript
 from dossier.utils.config import get_config
 from dossier.utils.types import _UNSET
 
@@ -49,6 +51,7 @@ def chunk_recording_command(
     rec_id: str = typer.Argument(..., help="Recording ID to chunk."),
     chunk_minutes: int = typer.Option(CONFIG.audio.chunk_minutes, help="Chunk duration in minutes."),
     overlap_seconds: int = typer.Option(CONFIG.audio.overlap_seconds, help="Overlap duration in seconds."),
+    mode: ChunkingMode = typer.Option(ChunkingMode.SPLIT, help="Chunking mode: full, split, or overlap."),
 ) -> None:
     """Chunk a recording into overlapping segments."""
     from dossier.pipeline.chunk import chunk_recording
@@ -59,6 +62,7 @@ def chunk_recording_command(
         rec_id=rec.id,
         chunk_minutes=chunk_minutes,
         overlap_seconds=overlap_seconds,
+        mode=mode,
     )
     typer.echo(f"Recording {rec.name} chunked into {len(artifact.tracks)} tracks.")
 
@@ -118,8 +122,10 @@ def transcribe_command(
         chunk_set_id = chunkset.chunk_run.id
     typer.echo(f"Transcribing recording '{rec.name}' using chunk set '{chunk_set_id}'...")
     typer.echo(f"Model: {model}, Device: {device}, Compute Type: {compute_type}, Language: {language or 'auto-detect'}")
+    start_time = datetime.now()
+    typer.echo(f"Start: {start_time.isoformat()}")
 
-    transcribe_recording(
+    artifact = transcribe_recording(
         rec_id=rec.id,
         model=model,
         device=device,
@@ -128,24 +134,51 @@ def transcribe_command(
         language=language,
         prompt=prompt or _UNSET,
     )
-    typer.echo(f"Transcription of recording '{rec.name}' using chunk set '{chunk_set_id}' completed.")
+    typer.echo(
+        f"Transcription of recording '{rec.name}' using chunk set '{chunk_set_id}' completed."
+        f" Transcription ID: {artifact.transcription.id}"
+    )
+    end_time = datetime.now()
+    typer.echo(f"End: {end_time.isoformat()}")
+    typer.echo(f"Duration: {end_time - start_time}")
 
 
-@app.command("merge")
-def merge_transcripts_command(
-    rec_id: str = typer.Argument(..., help="Recording ID to merge transcripts for."),
+@app.command("compile")
+def compile_transcripts_command(
+    rec_id: str = typer.Argument(..., help="Recording ID to compile transcripts for."),
+    new: bool = typer.Option(False, help="Compile only new (uncompiled) transcripts."),
 ) -> None:
-    """Merge all (unmerged) chunk transcripts into a single transcript."""
-    from dossier.pipeline.merge import merge_transcription
+    """Compile all (uncompiled) chunk transcripts into a single transcript."""
+    from dossier.pipeline.compile import compile_transcription
 
     rec = IndexController().get_recording(rec_id)
 
     runs = TranscriptionRunArtifact.list(rec.id)
-    unmerged_transcriptions = [run for run in runs if not run.merged]
-    for transcription in unmerged_transcriptions:
-        typer.echo(f"Merging transcription run '{transcription.transcription.id}' for recording '{rec.name}'...")
-        merge_transcription(transcription)
-        typer.echo(f"Transcription run '{transcription.transcription.id}' merged successfully.")
+    raw_transcriptions = [run for run in runs if not run.compiled] if new else runs
+    for transcription in raw_transcriptions:
+        typer.echo(f"Compiling transcription run '{transcription.transcription.id}' for recording '{rec.name}'...")
+        compile_transcription(transcription)
+        typer.echo(f"Transcription run '{transcription.transcription.id}' compiled successfully.")
+
+
+@app.command("export")
+def export_transcripts_command(
+    rec_id: str = typer.Argument(..., help="Recording ID to export transcripts for."),
+    format: ExportMode = typer.Option(ExportMode.LEAN, help="Export format (default: gemini)."),
+) -> None:
+    """Export all compiled transcripts into Gemini format."""
+    from dossier.artifact.transcripts import CompiledTranscriptArtifact
+
+    rec = IndexController().get_recording(rec_id)
+
+    compiled_transcripts = CompiledTranscriptArtifact.list(rec.id)
+    if not compiled_transcripts:
+        typer.echo(f"No compiled transcripts found for recording '{rec.name}'. Please run the 'compile' command first.")
+        raise typer.Exit(code=1)
+
+    transcript = select_transcript(compiled_transcripts)
+    p = export_transcription(transcript, format)
+    typer.echo(f"Exported transcript to '{p}' in {format.value} format.")
 
 
 def main() -> None:

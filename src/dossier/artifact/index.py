@@ -1,15 +1,15 @@
 """Index artifact for tracking all recordings/workspaces."""
 
 import secrets
-from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 from slugify import slugify
 
-from dossier.artifact.base import VersionedModel
+from dossier.artifact.base import FileMetadata, JsonFile, VersionedModel
 from dossier.artifact.recording import RecordingArtifact
 from dossier.utils.dir import RECORDINGS_DIR
+from dossier.utils.timestamp import timestamp
 
 
 class WorkspaceEntry(BaseModel):
@@ -20,7 +20,7 @@ class WorkspaceEntry(BaseModel):
     aliases: list[str] = Field(default_factory=list)
 
 
-class Index(VersionedModel):
+class Index(VersionedModel, JsonFile):
     """
     Index artifact for tracking all recordings/workspaces.
 
@@ -31,7 +31,6 @@ class Index(VersionedModel):
 
     recordings: list[WorkspaceEntry] = Field(default_factory=list)
     aliases: dict[str, str] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def rebuild_alias_index(self) -> None:
         """Rebuild the alias lookup table from recordings."""
@@ -46,16 +45,18 @@ class Index(VersionedModel):
 
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
-        return RECORDINGS_DIR / "index.json"
+        return self._path()
 
     @classmethod
     def load(cls) -> "Index":
         """Load the index artifact from disk."""
         from dossier.utils.storage import load_file
 
-        path = RECORDINGS_DIR / "index.json"
+        return load_file(cls._path(), cls)
 
-        return load_file(path, cls)
+    @classmethod
+    def _path(cls) -> Path:
+        return RECORDINGS_DIR / "index.json"
 
 
 class IndexController:
@@ -70,7 +71,7 @@ class IndexController:
         """Retrieve the index artifact, initializing it if it doesn't exist."""
         if not (RECORDINGS_DIR / "index.json").exists():
             print("Initializing Transcriber CLI Index..")
-            self.index = Index()
+            self.index = Index(metadata=FileMetadata.new(recording_id="index"))
             self.save_index()
         else:
             self.index = Index.load()
@@ -78,9 +79,7 @@ class IndexController:
 
     def save_index(self) -> None:
         """Save the index artifact to disk."""
-        from dossier.utils.storage import save_file
-
-        save_file(self.index)
+        self.index.save()
 
     def _get_recording(self, id_or_alias: str) -> WorkspaceEntry | None:
         """Retrieve a recording entry by ID or alias."""
@@ -125,7 +124,7 @@ class IndexController:
 
 def generate_recording_id(name: str) -> str:
     """Generate a unique ID for the recording, still human readable and relevant to the workspace name."""
-    date = datetime.now(UTC).strftime("%Y-%m-%d")
+    date = timestamp()
     slug = slugify(name, word_boundary=True, max_length=40)
     suffix = secrets.token_hex(3)
 

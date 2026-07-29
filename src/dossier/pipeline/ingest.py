@@ -4,14 +4,13 @@ Processes a recording into a normalized audio format and saves it to a newly cre
 """
 
 import zipfile
-from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
 from orjson import loads as json_loads
 
-from dossier.artifact.base import ArtifactMetadata
+from dossier.artifact.base import FileMetadata
 from dossier.artifact.index import IndexController, generate_recording_id
 from dossier.artifact.recording import AudioMetadata, AudioTrack, RecordingArtifact, RecordingMetadata, RecordingSource
 from dossier.utils.dir import RECORDINGS_DIR, calculate_sha256
@@ -98,7 +97,7 @@ def create_recording_artifact(
             sha256=calculate_sha256(input_file),
             original_path=input_file.as_posix(),
         ),
-        metadata=ArtifactMetadata(recording_id=rec_id, created_at=datetime.now(UTC)),
+        metadata=FileMetadata.new(recording_id=rec_id),
         audio=AudioMetadata(
             recording_duration=max(duration(track) for track in tracks),
             sample_rate=16000,

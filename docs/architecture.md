@@ -231,7 +231,7 @@ Each transcript stores:
 
 ## TranscriptArtifact
 
-The canonical merged transcript.
+The canonical compiled transcript.
 
 This is the primary human/LLM-facing transcript.
 

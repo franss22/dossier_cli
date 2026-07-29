@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from dossier.artifact.base import ArtifactMetadata
+from dossier.artifact.base import FileMetadata
 from dossier.artifact.chunks import ChunkMetadata, ChunkSetArtifact, TrackChunkManifest
 from dossier.artifact.transcripts import (
     ChunkTranscriptArtifact,
@@ -48,7 +48,7 @@ class Transcriber(ABC):
     _progress_state: TranscriptionProgress
 
     transcription: TranscriptionRun
-    artifact_metadata: ArtifactMetadata
+    artifact_metadata: FileMetadata
     chunkset: ChunkSetArtifact
     recording_id: str
 
@@ -85,7 +85,7 @@ class Transcriber(ABC):
             completed_chunks=0,
         )
         self.recording_id = recording_id
-        self.artifact_metadata = ArtifactMetadata(recording_id=recording_id)
+        self.artifact_metadata = FileMetadata.new(recording_id=recording_id)
         self.language = language
         self.prompt = PROMPT if isinstance(prompt, _Unset) else prompt
 

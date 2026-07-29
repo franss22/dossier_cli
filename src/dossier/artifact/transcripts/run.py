@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from slugify import slugify
 
 from dossier.utils.config import get_config
+from dossier.utils.timestamp import timestamp
 
 
 class DecoderConfiguration(BaseModel):
@@ -41,8 +42,6 @@ class TranscriptionRun(BaseModel):
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
-    processing_time: float | None = None
-
     decoder: DecoderConfiguration
 
     @classmethod
@@ -55,7 +54,7 @@ class TranscriptionRun(BaseModel):
         return "_".join([
             slugify(model),
             slugify(device),
-            datetime.now(UTC).strftime("%Y%m%d"),
+            timestamp(),
             secrets.token_hex(4),
         ])
 

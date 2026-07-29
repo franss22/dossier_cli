@@ -6,7 +6,7 @@ from .chunk import (
     ChunkTranscriptArtifact,
     ChunkTranscriptMetrics,
 )
-from .merged import MergedTranscriptArtifact
+from .compiled import CompiledTranscriptArtifact
 from .run import DecoderConfiguration, TranscriptionRun
 from .segment import (
     PipelineSegmentMetadata,
@@ -26,9 +26,9 @@ __all__ = [
     "ChunkTranscriptArtifact",
     "ChunkTranscriptMetrics",
     "ChunkTranscriptionState",
+    "CompiledTranscriptArtifact",
     "DecoderConfiguration",
     "DecoderConfiguration",
-    "MergedTranscriptArtifact",
     "PipelineSegmentMetadata",
     "RawDecoderOutput",
     "TranscriptSegment",

@@ -91,3 +91,13 @@ class TranscriptSegment(BaseModel):
     def duration(self) -> float:
         """Duration of the segment in seconds."""
         return self.end - self.start
+
+    @property
+    def start_time(self) -> float:
+        """Start time of the segment in seconds."""
+        return self.start
+
+    @property
+    def end_time(self) -> float:
+        """End time of the segment in seconds."""
+        return self.end
