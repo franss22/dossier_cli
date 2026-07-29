@@ -43,10 +43,9 @@ class CompiledTranscriptArtifact(Artifact):
         recording_id: str,
         transcription_id: str,
     ) -> Path:
-        return (
-            cls.workspace_path_static(recording_id)
-            / "compiled_transcriptions"
-            / f"{transcription_id}_compiled_transcript.json"
+        return cls.resolve_static(
+            recording_id,
+            f"compiled_transcriptions/{transcription_id}_compiled_transcript.json",
         )
 
     def storage_path(self) -> Path:
@@ -68,7 +67,7 @@ class CompiledTranscriptArtifact(Artifact):
         recording_id: str,
     ) -> list["CompiledTranscriptArtifact"]:
         """List all compiled transcript artifacts for a given recording."""
-        directory = cls.workspace_path_static(recording_id) / "compiled_transcriptions"
+        directory = cls.resolve_static(recording_id, "compiled_transcriptions")
 
         if not directory.exists():
             return []

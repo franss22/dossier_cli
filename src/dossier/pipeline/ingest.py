@@ -104,7 +104,7 @@ def create_recording_artifact(
             tracks=[
                 AudioTrack(
                     id=track.stem,
-                    file=track.relative_to(workspace_path).as_posix(),
+                    working_path=track.relative_to(workspace_path),
                     channels=1,
                     duration=duration(track),
                     sample_rate=16000,

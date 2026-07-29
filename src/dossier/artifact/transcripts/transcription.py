@@ -90,11 +90,9 @@ class TranscriptionRunArtifact(Artifact):
         recording_id: str,
         transcription_id: str,
     ) -> Path:
-        return (
-            cls.workspace_path_static(recording_id)
-            / "transcriptions"
-            / transcription_id
-            / "transcription_manifest.json"
+        return cls.resolve_static(
+            recording_id,
+            f"transcriptions/{transcription_id}/transcription_manifest.json",
         )
 
     def storage_path(self) -> Path:
@@ -144,7 +142,7 @@ class TranscriptionRunArtifact(Artifact):
         recording_id: str,
     ) -> list["TranscriptionRunArtifact"]:
         """List all transcription runs."""
-        directory = cls.workspace_path_static(recording_id) / "transcriptions"
+        directory = cls.resolve_static(recording_id, "transcriptions")
 
         if not directory.exists():
             return []

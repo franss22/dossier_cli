@@ -102,11 +102,9 @@ class ChunkTranscriptArtifact(Artifact):
         transcription_id: str,
         chunk_id: str,
     ) -> Path:
-        return (
-            cls.workspace_path_static(recording_id)
-            / "transcriptions"
-            / transcription_id
-            / f"{chunk_id}_chunk_transcript.json"
+        return cls.resolve_static(
+            recording_id,
+            f"transcriptions/{transcription_id}/{chunk_id}_chunk_transcript.json",
         )
 
     def storage_path(self) -> Path:

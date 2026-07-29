@@ -6,7 +6,7 @@ Artifacts are persisted objects that represent the state of a recording at a giv
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -109,29 +109,18 @@ class StoredFile(BaseModel, ABC):
         pass
 
 
-class WorkspaceFile(StoredFile, ABC):
-    """
-    Base class for files stored in a recording workspace.
-
-    Workspace files are stored in the root of the recording workspace.
-    """
-
-    @classmethod
-    def _path(cls, recording_id: str) -> Path:
-        """Exact storage location for a file of this class."""
-        return cls.workspace_path_static(recording_id) / f"{cls.__name__}.{cls.file_extension}"
-
-    def storage_path(self) -> Path:
-        """Exact storage location for this instance."""
-        return self._path(self.metadata.recording_id)
-
-
 class JsonFile(StoredFile):
     """Base class for JSON files."""
 
     def encode(self) -> bytes:
         """Encode this file as bytes."""
         return self.model_dump_json(indent=2).encode("utf-8")
+
+
+class HasWorkingPath(Protocol):
+    """Protocol for objects that have a working path."""
+
+    working_path: Path
 
 
 class Artifact(VersionedModel, JsonFile, ABC):
@@ -151,6 +140,21 @@ class Artifact(VersionedModel, JsonFile, ABC):
         from dossier.utils.storage import load_file
 
         return load_file(cls._path(*args, **kwargs), cls)
+
+    def resolve(self, path: str | Path | HasWorkingPath) -> Path:
+        """Resolve a workspace-relative path."""
+        if isinstance(path, (str, Path)):
+            return self.workspace_path() / path
+
+        return self.workspace_path() / path.working_path
+
+    @classmethod
+    def resolve_static(cls, recording_id: str, path: str | Path | HasWorkingPath) -> Path:
+        """Resolve a workspace-relative path from a recording ID."""
+        if isinstance(path, (str, Path)):
+            return cls.workspace_path_static(recording_id) / path
+
+        return cls.workspace_path_static(recording_id) / path.working_path
 
 
 class Export(StoredFile, ABC):

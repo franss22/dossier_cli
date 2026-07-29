@@ -126,7 +126,8 @@ def split_track(
     chunk_config: ChunkSetConfiguration,
 ) -> list[ChunkMetadata]:
     """Split an audio track according to the configured chunking mode."""
-    output_dir = recording.workspace_path() / "chunks" / chunk_config.id
+    workspace_root = recording.workspace_path()
+    output_dir = workspace_root / "chunks" / chunk_config.id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     ranges = build_chunk_ranges(track, chunk_config)
@@ -142,7 +143,7 @@ def split_track(
             output = output_dir / f"{chunk_id}.wav"
 
             segment(
-                input_file=recording.workspace_path() / track.file,
+                input_file=recording.resolve(track),
                 output_file=output,
                 start=start,
                 end=end,
@@ -156,7 +157,7 @@ def split_track(
                     index=index,
                     start=start,
                     end=end,
-                    path_from_root=output.name,
+                    working_path=output.relative_to(workspace_root),
                 )
             )
 
@@ -176,7 +177,7 @@ def build_implicit_chunkset(recording: RecordingArtifact) -> ChunkSetArtifact:
             index=0,
             start=0.0,
             end=track.duration,
-            path_from_root=track.file,
+            working_path=track.working_path,
         )
         manifest = TrackChunkManifest(track_id=track.id, chunks=[metadata])
         chunk_manifests.append(manifest)

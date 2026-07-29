@@ -134,7 +134,7 @@ class FasterWhisperTranscriber(Transcriber):
         self._wall_start = perf_counter()
         self._cpu_start = process_time()
 
-        segments, info = self.model.transcribe(str(chunk.full_path(self.chunkset.chunking_path(), track_id)), **kwargs)
+        segments, info = self.model.transcribe(str(self.chunkset.resolve(chunk)), **kwargs)
         self._raw_segments = list(segments)  # Consumes the generator,  actual decoding happens here
 
         self._wall_end = perf_counter()

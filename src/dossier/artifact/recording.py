@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from dossier.artifact.base import Artifact, VersionedModel
 
@@ -30,7 +30,7 @@ class AudioTrack(BaseModel):
     """A normalized audio track."""
 
     id: str
-    file: str
+    working_path: Path
     channels: int = 1
     duration: float
     sample_rate: int
@@ -64,7 +64,7 @@ class RecordingArtifact(Artifact):
 
     @classmethod
     def _path(cls, recording_id: str) -> Path:
-        return cls.workspace_path_static(recording_id) / "recording.json"
+        return cls.resolve_static(recording_id, "recording.json")
 
     def storage_path(self) -> Path:
         """Exact storage location for this artifact."""
@@ -72,7 +72,7 @@ class RecordingArtifact(Artifact):
 
     def get_tracks(self) -> list[tuple[AudioTrack, Path]]:
         """Get the absolute paths to all tracks in this recording."""
-        return [(track, self.workspace_path() / track.file) for track in self.audio.tracks]
+        return [(track, self.resolve(track)) for track in self.audio.tracks]
 
     @classmethod
     def load(cls, recording_id: str) -> "RecordingArtifact":
