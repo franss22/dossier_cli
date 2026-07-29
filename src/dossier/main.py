@@ -51,7 +51,7 @@ def chunk_recording_command(
     rec_id: str = typer.Argument(..., help="Recording ID to chunk."),
     chunk_minutes: int = typer.Option(CONFIG.audio.chunk_minutes, help="Chunk duration in minutes."),
     overlap_seconds: int = typer.Option(CONFIG.audio.overlap_seconds, help="Overlap duration in seconds."),
-    mode: ChunkingMode = typer.Option(ChunkingMode.SPLIT, help="Chunking mode: full, split, or overlap."),
+    mode: ChunkingMode = typer.Option(CONFIG.audio.chunk_mode, help="Chunking mode: full, split, or overlap."),
 ) -> None:
     """Chunk a recording into overlapping segments."""
     from dossier.pipeline.chunk import chunk_recording

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, get_type_hints
 
+from dossier.artifact.chunks import ChunkingMode
 from dossier.utils.dir import REPO_ROOT
 
 
@@ -19,6 +20,7 @@ class AudioConfig:
     chunk_minutes: int = 20
     overlap_seconds: int = 60
     sample_rate: int = 16000
+    chunk_mode: ChunkingMode = ChunkingMode.FULL  # Options: "full", "split", "overlap"
 
 
 @dataclass(slots=True)

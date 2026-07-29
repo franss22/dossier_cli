@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from dossier.artifact.base import Artifact
+from dossier.utils.dir import STORAGE_ROOT
 
 
 class ChunkingMode(StrEnum):
@@ -28,7 +29,8 @@ class ChunkMetadata(BaseModel):
     start: float
     end: float
 
-    file: str
+    path_from_root: str
+    """Audio file path relative to STORAGE_ROOT. (Generally, chunks/{chunking_id}/{track_id}/{chunk_id}.wav)"""
 
     @property
     def duration(self) -> float:
@@ -38,16 +40,16 @@ class ChunkMetadata(BaseModel):
     @property
     def path(self) -> Path:
         """Relative path to the chunk audio file."""
-        return Path(self.file)
+        return Path(self.path_from_root)
 
     @classmethod
     def build_id(cls, track_id: str, index: int) -> str:
         """Build a chunk ID from a track ID and index."""
         return f"{track_id}/{index:03d}"
 
-    def full_path(self, chunking_path: Path, track_id: str) -> Path:
+    def full_path(self) -> Path:
         """Absolute path to the chunk audio file."""
-        return chunking_path / track_id / self.path
+        return STORAGE_ROOT / self.path
 
 
 class TrackChunkManifest(BaseModel):
@@ -100,6 +102,11 @@ class ChunkSetArtifact(Artifact):
 
     chunk_run: ChunkSetConfiguration
     tracks: list[TrackChunkManifest]
+
+    @property
+    def mode(self) -> ChunkingMode:
+        """Chunking mode used to generate this chunk set."""
+        return self.chunk_run.mode
 
     @classmethod
     def _path(cls, recording_id: str, chunk_run_id: str) -> Path:

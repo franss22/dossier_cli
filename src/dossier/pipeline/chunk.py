@@ -156,10 +156,34 @@ def split_track(
                     index=index,
                     start=start,
                     end=end,
-                    file=output.name,
+                    path_from_root=output.name,
                 )
             )
 
             progress.advance(task)
 
     return chunks
+
+
+def build_implicit_chunkset(recording: RecordingArtifact) -> ChunkSetArtifact:
+    """Build an implicit chunk set for FULL mode, which just points to the source tracks."""
+    chunking_id = ChunkSetConfiguration.build_id(duration_mins=-1, overlap_seconds=0, mode=ChunkingMode.FULL)
+    chunk_config = ChunkSetConfiguration(id=chunking_id, duration_seconds=-1, overlap_seconds=0, mode=ChunkingMode.FULL)
+    chunk_manifests: list[TrackChunkManifest] = []
+    for track in recording.audio.tracks:
+        metadata = ChunkMetadata(
+            id=ChunkMetadata.build_id(track_id=track.id, index=0),
+            index=0,
+            start=0.0,
+            end=track.duration,
+            path_from_root=track.file,
+        )
+        manifest = TrackChunkManifest(track_id=track.id, chunks=[metadata])
+        chunk_manifests.append(manifest)
+
+    manifest_artifact = ChunkSetArtifact(
+        metadata=FileMetadata.new(recording_id=recording.metadata.recording_id),
+        chunk_run=chunk_config,
+        tracks=chunk_manifests,
+    )
+    return manifest_artifact

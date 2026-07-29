@@ -109,6 +109,23 @@ class StoredFile(BaseModel, ABC):
         pass
 
 
+class WorkspaceFile(StoredFile, ABC):
+    """
+    Base class for files stored in a recording workspace.
+
+    Workspace files are stored in the root of the recording workspace.
+    """
+
+    @classmethod
+    def _path(cls, recording_id: str) -> Path:
+        """Exact storage location for a file of this class."""
+        return cls.workspace_path_static(recording_id) / f"{cls.__name__}.{cls.file_extension}"
+
+    def storage_path(self) -> Path:
+        """Exact storage location for this instance."""
+        return self._path(self.metadata.recording_id)
+
+
 class JsonFile(StoredFile):
     """Base class for JSON files."""
 

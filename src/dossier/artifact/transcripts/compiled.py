@@ -32,6 +32,11 @@ class CompiledTranscriptArtifact(Artifact):
 
     segments: list[TranscriptSegment] = Field(default_factory=list)
 
+    @property
+    def id(self) -> str:
+        """Unique identifier for this compiled transcript."""
+        return self.transcription.id
+
     @classmethod
     def _path(
         cls,

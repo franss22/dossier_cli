@@ -3,6 +3,7 @@
 chunk_minutes = 25
 overlap_seconds = 300
 sample_rate = 16000
+chunk_mode = "full"
 
 [transcription]
 model_size = "large-v3-turbo"
