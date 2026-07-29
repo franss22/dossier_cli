@@ -90,11 +90,13 @@ def recordings() -> list[dict]:
         transcripts = CompiledTranscriptArtifact.list(recording.id)
 
         for transcript in transcripts:
-            result.append({
-                "recording_id": recording.id,
-                "transcription_id": transcript.id,
-                "name": recording.display_name,
-                "tracks": len(transcript.tracks),
-            })
+            result.append(
+                {
+                    "recording_id": recording.id,
+                    "transcription_id": transcript.id,
+                    "name": recording.display_name,
+                    "tracks": len(transcript.tracks),
+                }
+            )
 
     return result

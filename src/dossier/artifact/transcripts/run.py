@@ -51,12 +51,14 @@ class TranscriptionRun(BaseModel):
         device: str,
     ) -> str:
         """Build a unique transcription run ID."""
-        return "_".join([
-            slugify(model),
-            slugify(device),
-            timestamp(),
-            secrets.token_hex(4),
-        ])
+        return "_".join(
+            [
+                slugify(model),
+                slugify(device),
+                timestamp(),
+                secrets.token_hex(4),
+            ]
+        )
 
     @classmethod
     def create(
