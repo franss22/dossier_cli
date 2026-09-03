@@ -38,14 +38,17 @@ from dossier.utils.ffmpeg import segment
 
 def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int, mode: ChunkingMode) -> ChunkSetArtifact:
     """Split all tracks of a recording into overlapping chunks."""
-    if mode == ChunkingMode.SPLIT or mode == ChunkingMode.FULL:
-        overlap_seconds = 0
-    if mode == ChunkingMode.FULL:
-        chunk_minutes = -1
-    # Define chunking id
-    chunking_id = ChunkSetConfiguration.build_id(chunk_minutes, overlap_seconds, mode)
     # Load recording artifact
     rec = RecordingArtifact.load(rec_id)
+    if mode == ChunkingMode.FULL:
+        chunkset = build_implicit_chunkset(rec)
+        chunkset.save()
+        return chunkset
+    if mode == ChunkingMode.SPLIT:
+        overlap_seconds = 0
+    # Define chunking id
+    chunking_id = ChunkSetConfiguration.build_id(chunk_minutes, overlap_seconds, mode)
+
     chunk_config = ChunkSetConfiguration(
         id=chunking_id, duration_seconds=chunk_minutes * 60, overlap_seconds=overlap_seconds, mode=mode
     )

@@ -13,6 +13,7 @@ from orjson import loads as json_loads
 from dossier.artifact.base import FileMetadata
 from dossier.artifact.index import IndexController, generate_recording_id
 from dossier.artifact.recording import AudioMetadata, AudioTrack, RecordingArtifact, RecordingMetadata, RecordingSource
+from dossier.pipeline.chunk import build_implicit_chunkset
 from dossier.utils.dir import RECORDINGS_DIR, calculate_sha256
 from dossier.utils.ffmpeg import duration, run_ffmpeg, run_ffprobe
 from dossier.utils.storage import create_recording_directory
@@ -62,6 +63,8 @@ def ingest_recording(
         tracks=tracks,
     )
     artifact.save()
+
+    build_implicit_chunkset(artifact).save()
 
     return artifact
 
