@@ -83,5 +83,6 @@ line-ending = "auto"
 [dependency-groups]
 dev = [
     "icecream>=2.2.0",
+    "pydeps>=3.0.7",
     "ruff>=0.15.21",
 ]

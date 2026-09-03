@@ -1,225 +1,159 @@
-
 # Dossier Transcriber
 
 A local pipeline for turning tabletop RPG recordings into accurate, timestamped transcripts and AI-assisted session summaries.
 
-Designed for long-form tabletop sessions such as Delta Green campaigns.
+Dossier is designed primarily for long-form tabletop sessions such as Delta Green campaigns.
 
 ## Goals
 
-- Convert session recordings into high-quality transcripts
-- Support both single-track and multi-track recordings
-- Preserve timestamps and recording context
-- Produce portable transcript formats
-- Keep processing modular and tool-agnostic
-- Provide optional AI-assisted analysis (future)
+* High-quality, timestamped transcription
+* Multi-track recordings with reliable speaker attribution
+* Preservation of recording and speaker context
+* Portable transcript formats
+* Modular processing pipeline
+* Optional AI-assisted session analysis
 
 ---
 
-# Current Status
+# Current Capabilities
 
-## Completed ✅
+Dossier currently provides an end-to-end transcription pipeline:
 
-### Core Pipeline
+**Recording → Ingest → Audio → Chunking → Transcription → Compilation → Export**
 
-- [x] Python project setup with uv
-- [x] Typer CLI
-- [x] Rich logging and progress output
-- [x] TOML configuration system
-- [x] FFmpeg audio extraction
-- [x] Audio validation
-- [x] Audio chunking with overlap
-- [x] Faster-Whisper transcription backend
-- [x] Configurable transcription models
-- [x] CPU inference
-- [x] Timestamped transcript segments
-- [x] Initial prompt support
-- [x] Basic progress reporting
+### Recording & Audio
+
+Dossier primarily supports **[Craig](https://craig.chat/) recordings**, which provide each participant as a separate audio track. This preserves speaker identity without requiring automatic diarization.
+
+Recordings are validated and processed with FFmpeg. Single-track recordings are also supported.
+
+### Transcription
+
+Long recordings are split into overlapping chunks and transcribed using **Faster-Whisper**.
+
+Models, language, device, and transcription parameters are configurable. Transcripts retain timestamps and recording context.
+
+### Artifacts
+
+Processing is built around versioned JSON artifacts representing intermediate and final results, including:
+
+* Audio
+* Chunk manifests
+* Chunk transcripts
+* Compiled transcripts
+
+Artifacts form the boundaries between pipeline stages and are the machine-readable source of truth.
+
+### Multi-Track Compilation
+
+Speaker tracks are transcribed independently and compiled chronologically while preserving speaker information.
+
+### Export
+
+Transcripts can currently be exported as JSON and Markdown-oriented output.
 
 ---
 
 # Roadmap
 
-## Phase 1 — Transcript Artifact
+## Pipeline & Job Management
 
-Phase 1 — Artifact System
+Make processing robust and reusable across long-running jobs.
 
-- [x] Define artifact directory structure
-- [x] Define JSON schemas
-    - [x] Audio artifact
-    - [x] Chunk manifest
-    - [x] Chunk transcript
-    - [x] Final transcript
-- [x] Add artifact versioning
-- [x] Add artifact loading/saving
+* Resume interrupted jobs
+* Skip and cache completed stages
+* Re-run individual stages
+* Support multiple transcription runs for the same recording
+* Batch processing
+* Job manifests
 
-Goal:
+## Transcription Quality
 
-> Have a reliable machine-readable transcript that every other feature consumes.
+Improve accuracy for tabletop-specific vocabulary and context.
 
----
+* Prompt templates for campaigns, systems, characters, locations, and languages
+* Rolling context between chunks
+* Transcript cleanup and post-processing
+* Better handling of slang and proper nouns
+* More transcription parameters
+* GPU acceleration
 
-## Phase 2 — Recording & Audio Support
+## Export & Presentation
 
-Support real-world tabletop recording setups.
+Expand the export system for human use.
 
+* Plain-text export
+* Human-readable Markdown
+* Export templates
+* Speaker formatting
+* Improved timestamp formatting
 
-### Multi Track
+## AI Session Analysis
 
-- [ ] Track metadata
-    - [ ] Stream index
-    - [ ] Channel information
-    - [ ] Speaker label
-- [ ] Transcribe tracks independently
-- [ ] Compile transcripts chronologically
-- [ ] Preserve speaker information
+Optional analysis of completed transcripts.
 
-Supported workflows:
+* Recaps and summaries
+* Scene and event breakdowns
+* Character moments and player decisions
+* Characters, locations, organizations, items, and clues
+* Unresolved threads
+* Chronological timelines
 
-- OBS recordings
-- Discord recordings
-- Craig multi-track exports
-- Standard video files
+## Quality & Maintenance
 
----
-
-## Phase 3 — Export System
-
-Convert transcript artifacts into usable formats.
-
-- [ ] JSON export
-- [ ] Markdown export
-- [ ] Plain text export
-- [ ] Export templates
-- [ ] Human-readable formatting
-- [ ] Speaker formatting
-
-Examples:
-
-```text
-[00:12:42] Marcus:
-You arrive at the Macallistar Building...
-
-[00:12:55] Morgan:
-I check the apartment.
-```
+* Comprehensive automated tests
+* Better error handling
+* Performance benchmarks
+* Documentation and example configurations
 
 ---
 
-## Phase 4 — Transcription Quality
+# Future Ideas
 
-Improve transcript accuracy.
+### Search
 
-* [ ] Prompt template system
+* Full-text search
+* Semantic search
+* Local RAG over sessions
 
-  * [ ] Game system terminology
-  * [ ] Campaign terminology
-  * [ ] Character/NPC names
-  * [ ] Locations
-  * [ ] Language-specific hints
-* [ ] Configurable transcription parameters
-* [ ] Rolling context prompts
-* [ ] Transcript cleanup/post-processing
-* [ ] Better handling of slang and proper nouns
+### Presentation
 
-Future:
-
-* [ ] GPU acceleration
-
----
-
-## Phase 5 — Pipeline Architecture
-
-Make Dossier usable as a repeatable processing tool.
-
-* [ ] Independent pipeline stages
-* [ ] Resume interrupted jobs
-* [ ] Skip completed stages
-* [ ] Cache completed stages
-* [ ] Re-run individual stages
-* [ ] Support for multiple transcriptions of the same file (for testing parameters, for ex)
-
-Examples:
-
-```bash
-dossier audio session.mkv
-dossier transcribe session/
-dossier export session/
-dossier analyze session/
-```
-
-* [ ] Batch processing
-* [ ] Job manifests
-
----
-
-## Phase 6 — AI Session Analysis
-
-Optional AI-powered features.
-
-### Summaries
-
-* [ ] Short recap
-* [ ] Detailed recap
-* [ ] Scene breakdown
-* [ ] Important events
-* [ ] Character moments
-* [ ] Player decisions
-
-### Structured Extraction
-
-* [ ] Characters/NPCs
-* [ ] Locations
-* [ ] Organizations
-* [ ] Items
-* [ ] Clues
-* [ ] Important terminology
-* [ ] Unresolved threads
-
-### Timeline
-
-* [ ] Chronological events
-* [ ] Key moments with timestamps
-* [ ] Decisions and consequences
-
----
-
-## Phase 7 — Quality & Maintenance
-
-Improve long-term usability.
-
-* [ ] Better error handling
-* [ ] Logging system
-* [ ] Performance benchmarks
-* [ ] Documentation
-* [ ] Example configurations
-* [ ] Test suite
-
----
-
-# Nice To Have
-
-## Search
-
-* [ ] Full-text transcript search
-* [ ] Semantic search
-* [ ] Local RAG over sessions
-
-## Presentation
-
-* [ ] HTML transcript viewer
-* [ ] PDF export
-* [ ] Audio ↔ transcript synchronization
+* HTML transcript viewer
+* PDF export
+* Audio ↔ transcript synchronization
 
 ---
 
 # Design Principles
 
-* JSON should be the source of truth.
-* Each pipeline stage should be independent.
-* Transcription, export, and analysis should remain separate.
-* LLM usage should be optional.
-* Configuration should be preferred over hardcoded behavior.
-* External integrations (Obsidian, databases, etc.) are outside the scope of Dossier.
-* Multi-track recordings should be preferred over automatic diarization when available.
+### JSON is the source of truth
 
+Pipeline stages communicate through structured, versioned artifacts. Export formats are derived from those artifacts.
+
+### Independent pipeline stages
+
+Ingestion, transcription, compilation, export, and analysis have clear boundaries and should remain independently usable.
+
+### AI analysis is optional
+
+Session analysis is an optional downstream feature. AI-based transcription is fundamental to Dossier.
+
+### Preserve source context
+
+Timestamps, recording metadata, track information, and speaker information should be preserved throughout processing whenever possible.
+
+### Prefer source-provided speaker tracks
+
+When separate speaker tracks are available, use them instead of automatic diarization. Craig is the primary supported workflow for this reason.
+
+### Strong typing
+
+Strict type hints, explicit data models, and well-defined interfaces are used to make the architecture and data flow clear.
+
+### Configuration over hardcoding
+
+Models, prompts, transcription parameters, and other processing choices should be configurable where practical.
+
+### External integrations stay outside the core
+
+Integrations such as Obsidian or databases should consume Dossier's artifacts rather than become dependencies of the core pipeline.

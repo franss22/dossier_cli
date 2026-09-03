@@ -11,20 +11,6 @@ from dossier.artifact.index import Index
 from dossier.utils.dir import RECORDINGS_DIR
 
 
-def save_file(
-    data: StoredFile,
-) -> Path:
-    """Save an artifact to disk."""
-    path = data.storage_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    path.write_text(
-        data.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
-    return path
-
-
 def load_file[T: Artifact | Index](
     path: Path,
     model: type[T],
