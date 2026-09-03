@@ -51,6 +51,13 @@ class AnalysisConfig:
 
 
 @dataclass(slots=True)
+class SpeakerConfig:
+    """Speaker labeling settings loaded from the `[speakers]` section."""
+
+    labels: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AppConfig:
     """Top-level application configuration composed from the TOML file."""
 
@@ -58,6 +65,7 @@ class AppConfig:
     transcription: TranscriptionConfig = field(default_factory=TranscriptionConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    speakers: SpeakerConfig = field(default_factory=SpeakerConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> AppConfig:
@@ -67,6 +75,7 @@ class AppConfig:
             transcription=TranscriptionConfig(**data.get("transcription", {})),
             output=OutputConfig(**data.get("output", {})),
             analysis=AnalysisConfig(**data.get("analysis", {})),
+            speakers=SpeakerConfig(**data.get("speakers", {})),
         )
 
     def shadow(self, **kwargs: Any) -> AppConfig:

@@ -332,7 +332,7 @@ The architecture is designed so important metadata survives every stage:
 - track identity survives through `AudioTrack.id`, `ChunkMetadata.id`, `ChunkSource.track_id`, and `TranscriptSegment.track_id`
 - timing survives as absolute `start` and `end` times on transcript segments
 - transcription provenance survives through `chunk_id`, `chunk_index`, and `transcription_id`
-- human speaker labels are applied at export time from track IDs rather than replacing track IDs inside the canonical transcript
+- human speaker labels are applied at export time from track IDs plus configured speaker labels rather than replacing track IDs inside the canonical transcript
 
 ---
 
@@ -363,7 +363,7 @@ How speaker identity is represented today:
 - Craig contributes separate source files per participant
 - each source file becomes an `AudioTrack`
 - track identity is carried as `track_id` through chunking, transcription, and compilation
-- speaker labels are currently derived from track IDs by `utils.speakers`, not by diarization
+- speaker labels are derived from track IDs by `utils.speakers` using configuration from `config.toml`, not by diarization
 
 How tracks are combined:
 
@@ -440,7 +440,7 @@ Configuration is defined in `config.toml` and loaded by `utils.config`.
 Architecture notes:
 
 - config models are dataclasses, not Pydantic models
-- `AppConfig` groups audio, transcription, output, and analysis concerns
+- `AppConfig` groups audio, transcription, output, analysis, and speaker-label concerns
 - `get_config()` caches the parsed config for reuse
 - the CLI uses config values primarily as defaults, then passes explicit arguments into pipeline functions
 
@@ -450,6 +450,7 @@ Configurable concerns currently include:
 - transcription model/device/language/compute type
 - output preferences
 - analysis settings reserved for future use
+- speaker labels for export-time display
 
 Important architectural boundary:
 
@@ -531,7 +532,7 @@ These are current implementation questions worth keeping visible.
 
 ### 2. Speaker labeling is external to artifacts
 
-Human-readable speaker names are currently derived by `utils.speakers` from track IDs using a hardcoded mapping. That means the canonical persisted transcript stores stable track IDs, which is good, but the source of display labels is not yet part of recording metadata or a dedicated artifact. This is workable but conceptually split.
+Human-readable speaker names are derived by `utils.speakers` from track IDs using configuration in `config.toml`. The canonical persisted transcript still stores stable track IDs, while display labels remain external to the transcript artifacts themselves. That keeps the persisted transcript stable, but the display-label source still lives outside recording metadata and outside a dedicated artifact.
 
 ### 3. Persistence responsibilities are slightly duplicated
 

@@ -19,3 +19,6 @@ format = ["json", "md"]
 enabled = false
 provider = "gemini"
 model = "gemini-2.5-flash"
+
+[speakers]
+labels = { b1rdest = "Diego (Mishima)", cfspr = "Coni (May)", exrider = "Luciano (Moriarty)", emi22z = "Emi (GM)", quemares = "Menares (Morgan)", kleinmetallicis = "Taco (Mastiff)" }
