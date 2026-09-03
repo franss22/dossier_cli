@@ -6,16 +6,17 @@ Stable internal representations for pipeline stages.
 Pipeline:
 
 RecordingArtifact
+        + normalized audio track files
         |
         v
-AudioArtifact
+ChunkSetArtifact
         |
         v
-ChunkManifestArtifact
+TranscriptionRunArtifact + ChunkTranscriptArtifact(s)
         |
         v
-ChunkTranscriptArtifact(s)
+CompiledTranscriptArtifact
         |
         v
-TranscriptArtifact
+Export
 """

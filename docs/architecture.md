@@ -525,27 +525,23 @@ The following rules appear intentional in the current implementation.
 
 These are current implementation questions worth keeping visible.
 
-### 1. Stale conceptual naming around audio artifacts
-
-The repository still contains documentation and comments that imply a separate `AudioArtifact`, but the current code stores audio metadata inside `RecordingArtifact` and stores normalized WAVs directly on disk. The conceptual model is clear enough once read in code, but the naming drift makes the architecture harder to explain cleanly.
-
-### 2. Partial resume semantics
+### 1. Partial resume semantics
 
 `TranscriptionRunArtifact` persists chunk completion state incrementally, which strongly suggests resumable transcription was intended. However, the CLI currently creates a new run rather than reopening an existing transcription manifest. The architecture contains the beginnings of resume support, but not a complete end-user workflow.
 
-### 3. Speaker labeling is external to artifacts
+### 2. Speaker labeling is external to artifacts
 
 Human-readable speaker names are currently derived by `utils.speakers` from track IDs using a hardcoded mapping. That means the canonical persisted transcript stores stable track IDs, which is good, but the source of display labels is not yet part of recording metadata or a dedicated artifact. This is workable but conceptually split.
 
-### 4. Persistence responsibilities are slightly duplicated
+### 3. Persistence responsibilities are slightly duplicated
 
 Artifacts can save themselves through base-class methods, while `utils.storage` also exposes generic save/load helpers. The load path is still meaningful, but the split makes it less obvious whether persistence behavior belongs to artifact classes, storage helpers, or both.
 
-### 5. Export terminology is broader than current behavior
+### 4. Export terminology is broader than current behavior
 
 The export layer is architecturally separate and real, but current concrete formats are limited to lean JSON and an LLM-oriented markdown export. The README roadmap language still implies a broader human-facing export system than the present implementation actually provides.
 
-### 6. Analysis configuration exists before analysis architecture
+### 5. Analysis configuration exists before analysis architecture
 
 `config.toml` and `AppConfig` already contain analysis settings, but there is no corresponding `analyze` CLI command or analysis artifact pipeline yet. The configuration surface is ahead of the implemented architecture.
 

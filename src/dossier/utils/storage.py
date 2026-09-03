@@ -6,7 +6,7 @@ objects.
 
 from pathlib import Path
 
-from dossier.artifact.base import Artifact, StoredFile
+from dossier.artifact.base import Artifact
 from dossier.artifact.index import Index
 from dossier.utils.dir import RECORDINGS_DIR
 
