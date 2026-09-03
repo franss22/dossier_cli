@@ -21,3 +21,7 @@ temp_input/*
 
 storage/*
 !storage/.keep
+
+
+profiles/*
+!profiles/.keep
