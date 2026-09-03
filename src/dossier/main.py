@@ -12,7 +12,7 @@ from dossier.artifact.chunks import ChunkingMode, ChunkSetArtifact
 from dossier.artifact.index import IndexController
 from dossier.artifact.transcripts import TranscriptionRunArtifact
 from dossier.pipeline.export import ExportMode, export_transcription
-from dossier.ui import select_chunkset, select_transcript
+from dossier.ui.select import select_chunkset, select_transcript
 from dossier.utils.config import get_config
 from dossier.utils.types import _UNSET
 
