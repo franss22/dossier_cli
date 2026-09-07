@@ -172,6 +172,16 @@ class ChecklistState(StrEnum):
     COMPLETE = "complete"
 
 
+class RunProgressStep(StrEnum):
+    """Top-level steps shown during `dossier run`."""
+
+    IMPORT = "Import"
+    CHUNK = "Chunk"
+    TRANSCRIBE = "Transcribe"
+    COMPILE = "Compile"
+    EXPORT = "Export"
+
+
 class Checklist:
     """Live-updating completion checklist."""
 
@@ -304,6 +314,90 @@ class ProgressDashboard:
             self.checklist,
             self.progress,
         )
+
+
+class RunProgress:
+    """Top-level progress controller for the `dossier run` workflow."""
+
+    def __init__(self, ui: ProgressUI, checklist: Checklist) -> None:
+        self.ui = ui
+        self.checklist = checklist
+
+    @contextmanager
+    def stage(
+        self,
+        step: RunProgressStep,
+        total: int | None = None,
+    ) -> Generator[Task]:
+        """Render one active run stage and mark it complete on success."""
+        with self.ui.task(step.value, total=total) as task:
+            try:
+                yield task
+            except Exception:
+                raise
+            else:
+                self.checklist.complete(step.value)
+
+    @contextmanager
+    def transcription_callback(
+        self,
+        task: Task,
+    ) -> Generator[Callable[[TranscriptionProgress], None]]:
+        """Create a callback that nests chunk progress under the transcription stage."""
+        track_context = None
+        track_task = None
+        active_track_id: str | None = None
+
+        def close_track_task() -> None:
+            nonlocal track_context, track_task, active_track_id
+
+            if track_context is not None:
+                track_context.__exit__(None, None, None)
+            track_context = None
+            track_task = None
+            active_track_id = None
+
+        def on_progress(state: TranscriptionProgress) -> None:
+            nonlocal track_context, track_task, active_track_id
+
+            task.update(
+                total=state.total_chunks,
+                completed=state.completed_chunks,
+                description=(
+                    f"{RunProgressStep.TRANSCRIBE.value} ({state.completed_tracks}/{state.total_tracks} tracks)"
+                ),
+            )
+
+            current_track_id = state.current_track_id or "Track"
+            if current_track_id != active_track_id:
+                close_track_task()
+                track_context = self.ui.task(current_track_id, total=state.current_track_total_chunks, prefix="  ")
+                track_task = track_context.__enter__()
+                active_track_id = current_track_id
+
+            if track_task is not None:
+                track_task.update(
+                    total=state.current_track_total_chunks,
+                    completed=state.current_track_completed_chunks,
+                    description=current_track_id,
+                )
+
+        try:
+            yield on_progress
+        finally:
+            close_track_task()
+
+
+@contextmanager
+def run_progress() -> Generator[RunProgress]:
+    """Display the unified dashboard for a single `dossier run` execution."""
+    checklist_items = [step.value for step in RunProgressStep]
+    run_checklist = Checklist("Pipeline", checklist_items)
+    with ProgressUI() as ui, dashboard(ui, run_checklist):
+        try:
+            yield RunProgress(ui, run_checklist)
+        finally:
+            run_checklist.finish()
 
 
 @contextmanager

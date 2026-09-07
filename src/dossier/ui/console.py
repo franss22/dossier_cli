@@ -1,5 +1,7 @@
 """Console message helpers for Dossier."""
 
+from pathlib import Path
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -20,6 +22,16 @@ def success(message: str) -> None:
 def error(message: str) -> None:
     """Print an error message to the console."""
     console.print(f"[red]✗[/red] {message}")
+
+
+def path_success(label: str, path: Path) -> None:
+    """Print a success message with a clickable path label."""
+    console.print(_path_message("[green]✓[/green]", label, path))
+
+
+def path_info(label: str, path: Path) -> None:
+    """Print an informational message with a clickable path label."""
+    console.print(_path_message("[cyan]→[/cyan]", label, path))
 
 
 def print_run_header(
@@ -50,3 +62,21 @@ def print_run_header(
             expand=False,
         )
     )
+
+
+def _path_message(prefix: str, label: str, path: Path) -> Text:
+    """Format a short clickable path with a repo-relative fallback display."""
+    resolved_path = path.resolve()
+    display_name = resolved_path.name
+
+    try:
+        compact_path = resolved_path.relative_to(Path.cwd())
+    except ValueError:
+        compact_path = resolved_path
+
+    message = Text.from_markup(f"{prefix} {label}: ")
+    filename = Text(display_name, style=f"link {resolved_path.as_uri()} underline")
+    location = Text(f" ({compact_path.as_posix()})", style="dim")
+    message.append_text(filename)
+    message.append_text(location)
+    return message

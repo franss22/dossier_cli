@@ -21,6 +21,20 @@ Dossier currently provides an end-to-end transcription pipeline:
 
 **Recording → Ingest → Audio → Chunking → Transcription → Compilation → Export**
 
+The primary CLI workflow is now:
+
+```text
+dossier run <input_file>
+```
+
+For already-ingested workspaces, the same happy path can continue from an existing recording:
+
+```text
+dossier run --recording <recording-id>
+```
+
+Stage-specific commands such as `import`, `chunk`, `transcribe`, `compile`, and `export` remain available for debugging, experimentation, and manual reruns.
+
 ### Recording & Audio
 
 Dossier primarily supports **[Craig](https://craig.chat/) recordings**, which provide each participant as a separate audio track. This preserves speaker identity without requiring automatic diarization.
@@ -66,6 +80,12 @@ Make processing robust and reusable across long-running jobs.
 * Support multiple transcription runs for the same recording
 * Batch processing
 * Job manifests
+
+Near-term UX focus:
+
+* Make `dossier run` the default single-recording workflow
+* Add queueing on top of the same orchestration path
+* Improve failure summaries and continuation guidance
 
 ## Transcription Quality
 

@@ -62,6 +62,7 @@ CLI mapping:
 
 | CLI command | Architectural role |
 | --- | --- |
+| `dossier run` | happy-path single-recording orchestration across ingest/transcribe/compile/export |
 | `dossier import` | ingest stage |
 | `dossier chunk` | chunking stage |
 | `dossier transcribe` | transcription stage |
@@ -526,21 +527,21 @@ The following rules appear intentional in the current implementation.
 
 These are current implementation questions worth keeping visible.
 
-### 1. Partial resume semantics
+### 1. Resume is planned but not yet surfaced
 
-`TranscriptionRunArtifact` persists chunk completion state incrementally, which strongly suggests resumable transcription was intended. However, the CLI currently creates a new run rather than reopening an existing transcription manifest. The architecture contains the beginnings of resume support, but not a complete end-user workflow.
+`TranscriptionRunArtifact` persists chunk completion state incrementally, which gives the codebase most of the state needed for a future resume workflow. The intended behavior is a good fit for the current artifact model, but the CLI does not yet try to match a new transcription request against an existing compatible run and reopen it.
 
 ### 2. Speaker labeling is external to artifacts
 
-Human-readable speaker names are derived by `utils.speakers` from track IDs using configuration in `config.toml`. The canonical persisted transcript still stores stable track IDs, while display labels remain external to the transcript artifacts themselves. That keeps the persisted transcript stable, but the display-label source still lives outside recording metadata and outside a dedicated artifact.
+Human-readable speaker names are derived by `utils.speakers` from track IDs using configuration in `config.toml`. This appears intentional: Craig provides participant identity from Discord, but not necessarily the final human-facing naming a campaign wants to use. Keeping stable track IDs in transcript artifacts while applying configurable display labels at export time matches that constraint.
 
 ### 3. Persistence responsibilities are slightly duplicated
 
 Artifacts can save themselves through base-class methods, while `utils.storage` also exposes generic save/load helpers. The load path is still meaningful, but the split makes it less obvious whether persistence behavior belongs to artifact classes, storage helpers, or both.
 
-### 4. Export terminology is broader than current behavior
+### 4. Export expansion is planned
 
-The export layer is architecturally separate and real, but current concrete formats are limited to lean JSON and an LLM-oriented markdown export. The README roadmap language still implies a broader human-facing export system than the present implementation actually provides.
+The export layer is intentionally narrower than the long-term roadmap at the moment. Current concrete formats are limited to lean JSON and an LLM-oriented markdown export, while richer human-facing exports remain planned extensions rather than architectural inconsistencies.
 
 ### 5. Analysis configuration exists before analysis architecture
 

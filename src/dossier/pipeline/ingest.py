@@ -44,7 +44,8 @@ def ingest_recording(
             "Failed to generate a valid recording ID. Make sure the workspace name is valid and not empty."
         )
 
-    IndexController().add_recording(rec_id, workspace_name, aliases)
+    index_controller = IndexController()
+    slug_aliases = index_controller.validate_recording(rec_id, aliases)
 
     workspace_path = create_recording_directory(rec_id)
     input_file = Path(input_file)
@@ -65,6 +66,7 @@ def ingest_recording(
     artifact.save()
 
     build_implicit_chunkset(artifact).save()
+    index_controller.add_recording(rec_id, workspace_name, slug_aliases)
 
     return artifact
 

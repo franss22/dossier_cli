@@ -98,17 +98,38 @@ class IndexController:
             raise ValueError(f"Recording '{id_or_alias}' not found in index.")
         return RecordingArtifact.load(recording_entry.id)
 
-    def add_recording(self, recording_id: str, name: str, aliases: list[str] | None = None) -> None:
-        """Add a new recording to the index."""
-        from slugify import slugify
-
+    def validate_recording(self, recording_id: str, aliases: list[str] | None = None) -> list[str]:
+        """Validate a prospective recording ID and aliases without mutating the index."""
         slug_aliases = [slugify(alias, word_boundary=True, max_length=40) for alias in (aliases or [])]
-
-        if aliases and any(alias != slug for alias, slug in zip(aliases, slug_aliases, strict=True)):
-            print("warning: Some aliases have been slugified to ensure they are valid and safe for use as identifiers.")
 
         if any(entry.id == recording_id for entry in self.index.recordings):
             raise ValueError(f"Recording ID '{recording_id}' already exists in the index.")
+
+        pending_aliases = dict(self.index.aliases)
+        for alias in slug_aliases:
+            if alias in pending_aliases:
+                raise ValueError(f"Duplicate alias '{alias}' found in index.")
+            pending_aliases[alias] = recording_id
+
+        return slug_aliases
+
+    def find_recording_by_source_path(self, source_path: Path) -> RecordingArtifact | None:
+        """Return the existing recording imported from the given source path, if any."""
+        normalized_source = source_path.expanduser().resolve().as_posix()
+
+        for entry in self.index.recordings:
+            recording = RecordingArtifact.load(entry.id)
+            if recording.source.original_path == normalized_source:
+                return recording
+
+        return None
+
+    def add_recording(self, recording_id: str, name: str, aliases: list[str] | None = None) -> None:
+        """Add a new recording to the index."""
+        slug_aliases = self.validate_recording(recording_id, aliases)
+
+        if aliases and any(alias != slug for alias, slug in zip(aliases, slug_aliases, strict=True)):
+            print("warning: Some aliases have been slugified to ensure they are valid and safe for use as identifiers.")
 
         new_entry = WorkspaceEntry(id=recording_id, display_name=name, aliases=slug_aliases)
         self.index.recordings.append(new_entry)
