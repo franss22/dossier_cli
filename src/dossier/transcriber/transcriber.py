@@ -2,10 +2,14 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, CancelledError, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from queue import Empty, SimpleQueue
+from threading import Event
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dossier.artifact.base import FileMetadata
 from dossier.artifact.chunks import ChunkMetadata, ChunkSetArtifact, TrackChunkManifest
@@ -24,6 +28,39 @@ PROMPT = REPO_ROOT / "transcription_prompt.md"
 TranscriptionProgressCallback = Callable[["TranscriptionProgress"], None]
 
 
+class ActiveTrackProgress(BaseModel):
+    """Progress state for one currently active track."""
+
+    track_id: str
+    total_chunks: int
+    completed_chunks: int
+    current_chunk_id: str | None = None
+
+
+@dataclass(slots=True)
+class TrackWorkerUpdate:
+    """Worker-to-coordinator update for one chunk lifecycle transition."""
+
+    kind: str
+    track_id: str
+    chunk_id: str
+    total_chunks: int
+    completed_chunks: int
+    timestamp: datetime
+    acknowledge: Event | None = None
+
+
+@dataclass(slots=True)
+class TrackWorkerResult:
+    """Final result of processing one track."""
+
+    track_id: str
+    completed_chunks: int
+    failed_chunk_id: str | None = None
+    error: str | None = None
+    cancelled: bool = False
+
+
 class TranscriptionProgress(BaseModel):
     """Current transcription progress state."""
 
@@ -32,6 +69,8 @@ class TranscriptionProgress(BaseModel):
 
     total_chunks: int
     completed_chunks: int
+
+    active_tracks: list[ActiveTrackProgress] = Field(default_factory=list)
 
     current_track_id: str | None = None
 
@@ -51,6 +90,7 @@ class Transcriber(ABC):
     artifact_metadata: FileMetadata
     chunkset: ChunkSetArtifact
     recording_id: str
+    workers: int
 
     language: str | None = None
     prompt: Path | None = None
@@ -67,7 +107,11 @@ class Transcriber(ABC):
         language: str | None = None,
         prompt: Path | None | _Unset = PROMPT,
         progress_callback: TranscriptionProgressCallback | None = None,
+        workers: int = 1,
     ) -> None:
+        if workers < 1:
+            raise ValueError("workers must be at least 1.")
+
         self.transcription = TranscriptionRun.create(
             stage="transcription",
             decoder=DecoderConfiguration(
@@ -85,6 +129,7 @@ class Transcriber(ABC):
             completed_chunks=0,
         )
         self.recording_id = recording_id
+        self.workers = workers
         self.artifact_metadata = FileMetadata.new(recording_id=recording_id)
         self.language = language
         self.prompt = PROMPT if isinstance(prompt, _Unset) else prompt
@@ -103,6 +148,7 @@ class Transcriber(ABC):
     def update_progress(
         self,
         *,
+        active_tracks: list[ActiveTrackProgress] | _Unset = _UNSET,
         current_track_id: str | None | _Unset = _UNSET,
         current_chunk_id: str | None | _Unset = _UNSET,
         completed_tracks: int | _Unset = _UNSET,
@@ -111,6 +157,9 @@ class Transcriber(ABC):
         current_track_completed_chunks: int | _Unset = _UNSET,
     ) -> None:
         """Update the current progress state and report it."""
+        if not isinstance(active_tracks, _Unset):
+            self._progress_state.active_tracks = active_tracks
+
         if not isinstance(current_track_id, _Unset):
             self._progress_state.current_track_id = current_track_id
         if not isinstance(current_chunk_id, _Unset):
@@ -160,8 +209,77 @@ class Transcriber(ABC):
 
         manifest.save()
 
-        for track in chunk_set.tracks:
-            self.transcribe_track(track, manifest)
+        if not chunk_set.tracks:
+            manifest.completed_at = datetime.now(UTC)
+            manifest.save()
+            return manifest
+
+        update_queue: SimpleQueue[TrackWorkerUpdate] = SimpleQueue()
+        cancel_event = Event()
+        future_to_track: dict[Future[TrackWorkerResult], str] = {}
+        active_tracks: dict[str, ActiveTrackProgress] = {}
+        successful_tracks = 0
+        failure: TrackWorkerResult | None = None
+
+        with ThreadPoolExecutor(max_workers=min(self.workers, len(chunk_set.tracks))) as executor:
+            for track in chunk_set.tracks:
+                future = executor.submit(
+                    self.transcribe_track,
+                    track,
+                    manifest,
+                    report_update=update_queue.put,
+                    cancel_requested=cancel_event.is_set,
+                )
+                future_to_track[future] = track.track_id
+
+            while future_to_track:
+                self._drain_worker_updates(
+                    manifest=manifest,
+                    update_queue=update_queue,
+                    active_tracks=active_tracks,
+                    completed_tracks=successful_tracks,
+                )
+
+                done, _ = wait(tuple(future_to_track), timeout=0.05, return_when=FIRST_COMPLETED)
+                if not done:
+                    continue
+
+                self._drain_worker_updates(
+                    manifest=manifest,
+                    update_queue=update_queue,
+                    active_tracks=active_tracks,
+                    completed_tracks=successful_tracks,
+                )
+
+                for future in done:
+                    track_id = future_to_track.pop(future)
+                    result = self._resolve_track_future(track_id, future)
+                    active_tracks.pop(track_id, None)
+
+                    if result.error is not None:
+                        failure = result
+                        self._record_track_failure(manifest, result)
+                        cancel_event.set()
+                        for pending_future in future_to_track:
+                            pending_future.cancel()
+                        continue
+
+                    if not result.cancelled:
+                        successful_tracks += 1
+
+                    self._refresh_progress(active_tracks, successful_tracks, manifest)
+
+            self._drain_worker_updates(
+                manifest=manifest,
+                update_queue=update_queue,
+                active_tracks=active_tracks,
+                completed_tracks=successful_tracks,
+            )
+
+        if failure is not None:
+            raise RuntimeError(
+                f"Track '{failure.track_id}' failed on chunk '{failure.failed_chunk_id}': {failure.error}"
+            )
 
         manifest.completed_at = datetime.now(UTC)
         manifest.save()
@@ -172,47 +290,163 @@ class Transcriber(ABC):
         self,
         track: TrackChunkManifest,
         manifest: TranscriptionRunArtifact,
-    ) -> None:
+        *,
+        report_update: Callable[[TrackWorkerUpdate], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> TrackWorkerResult:
         """
         Transcribe all chunks belonging to one track.
 
         Generic implementation using transcribe_chunk().
         """
-        artifacts: list[ChunkTranscriptArtifact] = []
-        self.update_progress(
-            current_track_id=track.track_id,
-            current_track_total_chunks=len(track.chunks),
-            current_track_completed_chunks=0,
+        report_update = report_update or (lambda _update: None)
+        cancel_requested = cancel_requested or (lambda: False)
+        completed_chunks = sum(
+            1 for chunk_state in manifest.get_track_chunks(track.track_id).values() if chunk_state.completed
         )
+        total_chunks = len(track.chunks)
 
-        for i, chunk in enumerate(track.chunks):
-            self.update_progress(
-                completed_chunks=sum(1 for status in manifest.chunk_states.values() if status.completed),
-                current_track_completed_chunks=i,
-                current_chunk_id=chunk.id,
-            )
+        for chunk in track.chunks:
             if manifest.chunk_states[chunk.id].completed:
                 continue
 
-            manifest.chunk_states[chunk.id].started_at = datetime.now(UTC)
+            if cancel_requested():
+                return TrackWorkerResult(
+                    track_id=track.track_id,
+                    completed_chunks=completed_chunks,
+                    cancelled=True,
+                )
+
+            started_at = datetime.now(UTC)
+            started_ack = Event()
+            report_update(
+                TrackWorkerUpdate(
+                    kind="started",
+                    track_id=track.track_id,
+                    chunk_id=chunk.id,
+                    total_chunks=total_chunks,
+                    completed_chunks=completed_chunks,
+                    timestamp=started_at,
+                    acknowledge=started_ack,
+                )
+            )
+            started_ack.wait()
+
+            if cancel_requested():
+                return TrackWorkerResult(
+                    track_id=track.track_id,
+                    completed_chunks=completed_chunks,
+                    cancelled=True,
+                )
+
+            try:
+                artifact = self.transcribe_chunk(chunk, track_id=track.track_id)
+                artifact.save()
+            except Exception as exc:
+                return TrackWorkerResult(
+                    track_id=track.track_id,
+                    completed_chunks=completed_chunks,
+                    failed_chunk_id=chunk.id,
+                    error=str(exc),
+                )
+
+            completed_chunks += 1
+            report_update(
+                TrackWorkerUpdate(
+                    kind="completed",
+                    track_id=track.track_id,
+                    chunk_id=chunk.id,
+                    total_chunks=total_chunks,
+                    completed_chunks=completed_chunks,
+                    timestamp=datetime.now(UTC),
+                )
+            )
+
+        return TrackWorkerResult(
+            track_id=track.track_id,
+            completed_chunks=completed_chunks,
+        )
+
+    def _drain_worker_updates(
+        self,
+        *,
+        manifest: TranscriptionRunArtifact,
+        update_queue: SimpleQueue[TrackWorkerUpdate],
+        active_tracks: dict[str, ActiveTrackProgress],
+        completed_tracks: int,
+    ) -> None:
+        while True:
+            try:
+                update = update_queue.get_nowait()
+            except Empty:
+                break
+
+            chunk_state = manifest.chunk_states[update.chunk_id]
+            if update.kind == "started":
+                chunk_state.started_at = update.timestamp
+                chunk_state.error = None
+            elif update.kind == "completed":
+                chunk_state.completed = True
+                chunk_state.completed_at = update.timestamp
+                chunk_state.error = None
+
+            active_tracks[update.track_id] = ActiveTrackProgress(
+                track_id=update.track_id,
+                total_chunks=update.total_chunks,
+                completed_chunks=update.completed_chunks,
+                current_chunk_id=update.chunk_id,
+            )
             manifest.save()
+            self._refresh_progress(active_tracks, completed_tracks, manifest)
 
-            artifact = self.transcribe_chunk(chunk, track_id=track.track_id)
-            artifact.save()
+            if update.acknowledge is not None:
+                update.acknowledge.set()
 
-            manifest.chunk_states[chunk.id].completed = True
-            manifest.chunk_states[chunk.id].completed_at = datetime.now(UTC)
-            manifest.save()
-
-            # Save immediately so completed chunks survive interruptions.
-            artifacts.append(artifact)
+    def _refresh_progress(
+        self,
+        active_tracks: dict[str, ActiveTrackProgress],
+        completed_tracks: int,
+        manifest: TranscriptionRunArtifact,
+    ) -> None:
+        sorted_active_tracks = [active_tracks[key] for key in sorted(active_tracks)]
+        current_track = sorted_active_tracks[0] if sorted_active_tracks else None
+        completed_chunks = sum(1 for status in manifest.chunk_states.values() if status.completed)
 
         self.update_progress(
-            current_track_id=None,
-            current_track_total_chunks=0,
-            current_track_completed_chunks=0,
-            completed_tracks=self._progress_state.completed_tracks + 1,
+            active_tracks=sorted_active_tracks,
+            current_track_id=(current_track.track_id if current_track is not None else None),
+            current_chunk_id=(current_track.current_chunk_id if current_track is not None else None),
+            completed_tracks=completed_tracks,
+            completed_chunks=completed_chunks,
+            current_track_total_chunks=(current_track.total_chunks if current_track is not None else 0),
+            current_track_completed_chunks=(current_track.completed_chunks if current_track is not None else 0),
         )
+
+    @staticmethod
+    def _resolve_track_future(
+        track_id: str,
+        future: Future[TrackWorkerResult],
+    ) -> TrackWorkerResult:
+        try:
+            return future.result()
+        except CancelledError:
+            return TrackWorkerResult(track_id=track_id, completed_chunks=0, cancelled=True)
+        except Exception as exc:
+            return TrackWorkerResult(
+                track_id=track_id,
+                completed_chunks=0,
+                error=str(exc),
+            )
+
+    def _record_track_failure(
+        self,
+        manifest: TranscriptionRunArtifact,
+        result: TrackWorkerResult,
+    ) -> None:
+        if result.failed_chunk_id is not None:
+            manifest.chunk_states[result.failed_chunk_id].error = result.error
+        manifest.save()
+        self._refresh_progress({}, self._progress_state.completed_tracks, manifest)
 
     @abstractmethod
     def transcribe_chunk(

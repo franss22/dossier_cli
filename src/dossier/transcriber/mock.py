@@ -11,13 +11,15 @@ from dossier.artifact.transcripts import (
     TranscriptSegment,
 )
 from dossier.artifact.transcripts.chunk import ChunkSource
-from dossier.transcriber.transcriber import Transcriber, TranscriptionProgressCallback
+from dossier.transcriber.transcriber import Transcriber
 from dossier.utils.types import _UNSET, _Unset
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from dossier.artifact.chunks import ChunkMetadata, TrackChunkManifest
+    from dossier.transcriber.transcriber import TrackWorkerResult, TrackWorkerUpdate, TranscriptionProgressCallback
 
 PHRASES = [
     ">quick brown fox!!!<",
@@ -116,6 +118,7 @@ class MockTranscriber(Transcriber):
         language: str | None = None,
         prompt: Path | None | _Unset = _UNSET,
         progress_callback: TranscriptionProgressCallback | None = None,
+        workers: int = 1,
     ) -> None:
         self.recording = MockRecording()
         super().__init__(
@@ -126,21 +129,31 @@ class MockTranscriber(Transcriber):
             language=language,
             prompt=prompt,
             progress_callback=progress_callback,
+            workers=workers,
         )
 
     def transcribe_track(
         self,
         track: TrackChunkManifest,
         manifest: TranscriptionRunArtifact,
-    ) -> None:
+        *,
+        report_update: Callable[[TrackWorkerUpdate], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ) -> TrackWorkerResult:
         """
         Transcribe all chunks belonging to one track.
 
         Generic implementation using transcribe_chunk().
         """
-        super().transcribe_track(track, manifest)
+        result = super().transcribe_track(
+            track,
+            manifest,
+            report_update=report_update,
+            cancel_requested=cancel_requested,
+        )
         self.recording.phrase_offset += 1
         self.recording.time_offset += 1
+        return result
 
     def transcribe_chunk(
         self,

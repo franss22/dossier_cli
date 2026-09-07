@@ -7,7 +7,10 @@ from dossier.artifact.chunks import ChunkSetArtifact
 from dossier.artifact.transcripts import TranscriptionRunArtifact
 from dossier.transcriber.transcriber import TranscriptionProgress
 from dossier.ui.progress import transcription_progress_bar
+from dossier.utils.config import get_config
 from dossier.utils.types import _UNSET, _Unset
+
+CONFIG = get_config()
 
 
 def transcribe_recording(
@@ -19,6 +22,7 @@ def transcribe_recording(
     language: str | None = None,
     prompt: Path | None | _Unset = _UNSET,
     progress_callback: Callable[[TranscriptionProgress], None] | None = None,
+    workers: int = CONFIG.transcription.workers,
 ) -> TranscriptionRunArtifact:
     """
     Transcribe a recording into text.
@@ -38,6 +42,7 @@ def transcribe_recording(
                 recording_id=rec_id,
                 language=language,
                 prompt=prompt,
+                workers=workers,
             )
             chunks = ChunkSetArtifact.load(rec_id, chunkset)
 
@@ -51,6 +56,7 @@ def transcribe_recording(
         recording_id=rec_id,
         language=language,
         prompt=prompt,
+        workers=workers,
     )
     chunks = ChunkSetArtifact.load(rec_id, chunkset)
 

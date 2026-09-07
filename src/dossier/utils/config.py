@@ -31,6 +31,7 @@ class TranscriptionConfig:
     language: str = "en"
     device: str = "cpu"
     compute_type: str = "int8"
+    workers: int = 1
 
 
 @dataclass(slots=True)

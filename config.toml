@@ -10,7 +10,7 @@ model_size = "large-v3-turbo"
 language = "es"
 device = "cpu"
 compute_type = "float32"
-workers = 1
+workers = 3
 
 [output]
 directory = "output"
