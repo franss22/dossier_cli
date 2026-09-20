@@ -1,3 +1,5 @@
+"""Compare word-level transcript output from INT8 and FP32 transcription runs."""
+
 import html
 import json
 import re
@@ -14,7 +16,7 @@ def normalize(text: str) -> list[str]:
     return text.split()
 
 
-def load_transcript(path: Path):
+def load_transcript(path: Path) -> dict[str, list[dict]]:
     """Load a transcript and preserve timing/segment information per word."""
     data = json.loads(path.read_text(encoding="utf-8"))
 
@@ -57,7 +59,7 @@ def format_time(seconds: float) -> str:
     return f"{seconds:.2f}"
 
 
-def get_time_range(int8_words: list[dict], fp32_words: list[dict]):
+def get_time_range(int8_words: list[dict], fp32_words: list[dict]) -> tuple[float, float]:
     """Get the combined time range covered by a difference."""
     times = []
 
@@ -122,7 +124,7 @@ def generate_html_report(
     int8: dict,
     fp32: dict,
     output_path: Path,
-):
+) -> None:
     """Generate a complete HTML transcript comparison report."""
     speakers = sorted(set(int8) | set(fp32))
 
@@ -163,7 +165,7 @@ def generate_html_report(
                 rows.append(f"""
                 <div class="segment equal">
                     <div class="segment-meta">
-                        <span>{format_time(start)}s – {format_time(end)}s</span>
+                        <span>{format_time(start)}s - {format_time(end)}s</span>
                         <span>INT8 #{int8_segments}</span>
                         <span>FP32 #{fp32_segments}</span>
                     </div>
@@ -191,7 +193,7 @@ def generate_html_report(
                 <div class="segment difference">
                     <div class="segment-meta">
                         <span class="timestamp">
-                            {format_time(start)}s – {format_time(end)}s
+                            {format_time(start)}s - {format_time(end)}s
                         </span>
                         <span>INT8 #{int8_segments}</span>
                         <span>FP32 #{fp32_segments}</span>
@@ -451,7 +453,7 @@ def generate_html_report(
     output_path.write_text(document, encoding="utf-8")
 
 
-def print_console_report(int8, fp32):
+def print_console_report(int8: dict, fp32: dict) -> None:
     """Print the original console comparison report."""
     speakers = sorted(set(int8) | set(fp32))
 

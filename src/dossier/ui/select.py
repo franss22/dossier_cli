@@ -28,6 +28,42 @@ def select_transcript(transcripts: list[CompiledTranscriptArtifact]) -> Compiled
     return transcript
 
 
+def select_transcripts(transcripts: list[CompiledTranscriptArtifact]) -> list[CompiledTranscriptArtifact]:
+    """Prompt the user to select two or more compiled transcripts for comparison."""
+    choices = [
+        questionary.Choice(
+            title=_transcript_repr(transcript),
+            value=transcript,
+        )
+        for transcript in transcripts
+    ]
+    selected = questionary.checkbox(
+        "Select a baseline first, followed by one or more candidates:",
+        choices=choices,
+    ).ask()
+    if selected is None:
+        raise RuntimeError("No transcripts selected.")
+    if len(selected) < 2:
+        raise RuntimeError("Select at least two transcripts to compare.")
+    return selected
+
+
+def _transcript_repr(transcript: CompiledTranscriptArtifact) -> str:
+    """Format compiled transcript decoder settings for interactive selection."""
+    decoder = transcript.transcription.decoder
+    return " | ".join(
+        value
+        for value in (
+            transcript.transcription.id,
+            decoder.model,
+            decoder.device,
+            decoder.compute_type,
+            decoder.language,
+        )
+        if value
+    )
+
+
 def _chunkset_repr(chunkset: ChunkSetArtifact) -> str:
     match chunkset.chunk_run.mode:
         case "full":
