@@ -20,8 +20,6 @@ chunks/
         └── chunk_001.wav
 """
 
-import math
-
 from rich.progress import Progress
 
 from dossier.artifact.base import FileMetadata
@@ -38,31 +36,20 @@ from dossier.utils.ffmpeg import segment
 
 def chunk_recording(rec_id: str, chunk_minutes: int, overlap_seconds: int, mode: ChunkingMode) -> ChunkSetArtifact:
     """Split all tracks of a recording into overlapping chunks."""
-    # Load recording artifact
     rec = RecordingArtifact.load(rec_id)
-    if mode == ChunkingMode.FULL:
+    if mode.is_full_track():
         chunkset = build_implicit_chunkset(rec)
         chunkset.save()
         return chunkset
-    if mode == ChunkingMode.SPLIT:
-        overlap_seconds = 0
-    # Define chunking id
-    chunking_id = ChunkSetConfiguration.build_id(chunk_minutes, overlap_seconds, mode)
 
-    chunk_config = ChunkSetConfiguration(
-        id=chunking_id, duration_seconds=chunk_minutes * 60, overlap_seconds=overlap_seconds, mode=mode
-    )
-    # For each track, split into chunks
+    chunk_config = ChunkSetConfiguration.create(chunk_minutes, overlap_seconds, mode)
     chunk_manifests: list[TrackChunkManifest] = []
     for track in rec.audio.tracks:
-        # Get track duration
-        # Split track into chunks
         chunks = split_track(
             track=track,
             recording=rec,
             chunk_config=chunk_config,
         )
-        # Save chunk manifest artifact for this track
         manifest = TrackChunkManifest(track_id=track.id, chunks=chunks)
         chunk_manifests.append(manifest)
 
@@ -79,48 +66,13 @@ def build_chunk_ranges(
     track: AudioTrack,
     chunk_config: ChunkSetConfiguration,
 ) -> list[tuple[float, float]]:
-    """Build a list of (start, end) tuples for each chunk of a track.
-
-    Modes:
-    - FULL: Do not split the audio, just transcribe the full track as one chunk.
-    - SPLIT: Split the audio into non-overlapping chunks. (overrides overlap to 0)
-    - OVERLAP: Split the audio into overlapping chunks.
-    """
-    match chunk_config.mode:
-        case ChunkingMode.FULL:
-            return [(0.0, track.duration)]
-
-        case ChunkingMode.SPLIT:
-            chunk_size = chunk_config.duration_seconds
-            step = chunk_size
-
-        case ChunkingMode.OVERLAP:
-            chunk_size = chunk_config.duration_seconds
-            step = chunk_size - chunk_config.overlap_seconds
-
-    ranges: list[tuple[float, float]] = []
-
-    for start in range(0, math.ceil(track.duration), step):
-        end = min(start + chunk_size, track.duration)
-        ranges.append((float(start), end))
-
-    return ranges
+    """Build a list of (start, end) tuples for each chunk of a track."""
+    return chunk_config.chunk_ranges(track.duration)
 
 
 def split_msg(chunk_config: ChunkSetConfiguration, track: AudioTrack) -> str:
     """Build a message describing how the track will be split into chunks."""
-    match chunk_config.mode:
-        case ChunkingMode.FULL:
-            return f"Processing {track.id} as full track"
-
-        case ChunkingMode.SPLIT:
-            return f"Splitting {track.id} into {chunk_config.duration_seconds / 60:.2f}min chunks (no overlap)"
-
-        case ChunkingMode.OVERLAP:
-            return (
-                f"Splitting {track.id} into {chunk_config.duration_seconds / 60:.2f}min"
-                f" chunks with {chunk_config.overlap_seconds}s overlap"
-            )
+    return chunk_config.describe_track(track.id)
 
 
 def split_track(
@@ -171,8 +123,7 @@ def split_track(
 
 def build_implicit_chunkset(recording: RecordingArtifact) -> ChunkSetArtifact:
     """Build an implicit chunk set for FULL mode, which just points to the source tracks."""
-    chunking_id = ChunkSetConfiguration.build_id(duration_mins=-1, overlap_seconds=0, mode=ChunkingMode.FULL)
-    chunk_config = ChunkSetConfiguration(id=chunking_id, duration_seconds=-1, overlap_seconds=0, mode=ChunkingMode.FULL)
+    chunk_config = ChunkSetConfiguration.full()
     chunk_manifests: list[TrackChunkManifest] = []
     for track in recording.audio.tracks:
         metadata = ChunkMetadata(

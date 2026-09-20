@@ -1,8 +1,9 @@
 """Dossier CLI entrypoint."""
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeVar
 
 import typer
 from rich import box
@@ -15,7 +16,7 @@ from dossier.artifact.recording import RecordingArtifact
 from dossier.artifact.transcripts import CompiledTranscriptArtifact, TranscriptionRunArtifact
 from dossier.pipeline.export import ExportMode, export_transcription
 from dossier.pipeline.queue import QueueRequest, load_queue_file, run_queue
-from dossier.pipeline.run import RunError, RunRequest, run_recording
+from dossier.pipeline.run import DEFAULT_CHUNK_SET_ID, RunError, RunRequest, run_recording
 from dossier.ui.console import error, info, path_info, path_success, print_run_header, success
 from dossier.ui.select import select_chunkset, select_transcript, select_transcripts
 from dossier.utils.config import get_config
@@ -23,6 +24,7 @@ from dossier.utils.storage import delete_recording_directory
 from dossier.utils.types import _UNSET
 
 CONFIG = get_config()
+ResolvedItem = TypeVar("ResolvedItem")
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -294,7 +296,7 @@ def run_command(
             "Run Recording",
             recording={
                 "id": recording,
-                "chunk set": chunk_set or "chunkset_full",
+                "chunk set": chunk_set or DEFAULT_CHUNK_SET_ID,
             },
             transcription={
                 "model": model,
@@ -530,11 +532,7 @@ def _default_workspace_name(input_file: Path | None) -> str | None:
 
 
 def _resolve_recording_or_exit(recording_ref: str) -> RecordingArtifact:
-    try:
-        return IndexController().get_recording(recording_ref)
-    except ValueError as exc:
-        error(str(exc))
-        raise typer.Exit(code=1) from exc
+    return _load_or_exit(lambda: IndexController().get_recording(recording_ref))
 
 
 def _resolve_chunk_set_or_exit(
@@ -542,21 +540,14 @@ def _resolve_chunk_set_or_exit(
     chunk_set_id: str | None,
 ) -> ChunkSetArtifact:
     if chunk_set_id is not None:
-        try:
-            return ChunkSetArtifact.load(recording.recording.id, chunk_set_id)
-        except ValueError as exc:
-            error(str(exc))
-            raise typer.Exit(code=1) from exc
+        return _load_or_exit(lambda: ChunkSetArtifact.load(recording.recording.id, chunk_set_id))
 
     chunksets = ChunkSetArtifact.list(recording.recording.id)
-    if not chunksets:
-        error(f"No chunk sets found for recording '{recording.recording.id}'. Run `dossier chunk` first.")
-        raise typer.Exit(code=1)
-
-    if len(chunksets) == 1:
-        return chunksets[0]
-
-    return select_chunkset(chunksets)
+    return _resolve_from_collection_or_exit(
+        chunksets,
+        empty_message=f"No chunk sets found for recording '{recording.recording.id}'. Run `dossier chunk` first.",
+        selector=select_chunkset,
+    )
 
 
 def _resolve_compiled_transcript_or_exit(
@@ -564,22 +555,59 @@ def _resolve_compiled_transcript_or_exit(
     transcription_id: str | None,
 ) -> CompiledTranscriptArtifact:
     compiled_transcripts = CompiledTranscriptArtifact.list(recording.recording.id)
-    if not compiled_transcripts:
-        error(f"No compiled transcripts found for recording '{recording.recording.id}'. Run `dossier compile` first.")
+    return _resolve_from_collection_or_exit(
+        compiled_transcripts,
+        empty_message=(
+            f"No compiled transcripts found for recording '{recording.recording.id}'. Run `dossier compile` first."
+        ),
+        requested_id=transcription_id,
+        get_id=lambda transcript: transcript.transcription.id,
+        item_label="compiled transcript",
+        selector=select_transcript,
+        owner_label=recording.recording.id,
+    )
+
+
+def _load_or_exit(loader: Callable[[], ResolvedItem]) -> ResolvedItem:
+    """Run a loader and convert lookup failures into CLI exits."""
+    try:
+        return loader()
+    except (FileNotFoundError, ValueError) as exc:
+        error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+def _resolve_from_collection_or_exit(
+    items: list[ResolvedItem],
+    *,
+    empty_message: str,
+    selector: Callable[[list[ResolvedItem]], ResolvedItem],
+    requested_id: str | None = None,
+    get_id: Callable[[ResolvedItem], str] | None = None,
+    item_label: str | None = None,
+    owner_label: str | None = None,
+) -> ResolvedItem:
+    """Resolve one artifact from a collection via explicit ID or interactive selection."""
+    if not items:
+        error(empty_message)
         raise typer.Exit(code=1)
 
-    if transcription_id is not None:
-        for transcript in compiled_transcripts:
-            if transcript.transcription.id == transcription_id:
-                return transcript
+    if requested_id is not None:
+        if get_id is None or item_label is None:
+            raise ValueError("Explicit ID resolution requires an identifier accessor and item label.")
 
-        error(f"No compiled transcript '{transcription_id}' found for recording '{recording.recording.id}'.")
+        for item in items:
+            if get_id(item) == requested_id:
+                return item
+
+        owner_suffix = f" for recording '{owner_label}'" if owner_label is not None else ""
+        error(f"No {item_label} '{requested_id}' found{owner_suffix}.")
         raise typer.Exit(code=1)
 
-    if len(compiled_transcripts) == 1:
-        return compiled_transcripts[0]
+    if len(items) == 1:
+        return items[0]
 
-    return select_transcript(compiled_transcripts)
+    return selector(items)
 
 
 def _print_compiled_transcript_settings(transcripts: list[CompiledTranscriptArtifact]) -> None:

@@ -5,7 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from dossier.artifact.base import FileMetadata
-from dossier.artifact.chunks import ChunkSetArtifact
+from dossier.artifact.chunks import ChunkSetArtifact, ChunkSetConfiguration
 from dossier.artifact.index import IndexController
 from dossier.artifact.recording import AudioMetadata, RecordingArtifact, RecordingMetadata, RecordingSource
 from dossier.artifact.transcripts import CompiledTranscriptArtifact, TranscriptionRunArtifact
@@ -16,7 +16,7 @@ from dossier.pipeline.transcribe import transcribe_recording
 from dossier.ui.progress import RunProgressStep, run_progress
 from dossier.utils.types import _UNSET, _Unset
 
-DEFAULT_CHUNK_SET_ID = "chunkset_full"
+DEFAULT_CHUNK_SET_ID = ChunkSetConfiguration.full().id
 
 
 class RunStage(StrEnum):

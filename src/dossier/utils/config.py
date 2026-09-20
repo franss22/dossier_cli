@@ -20,7 +20,25 @@ class AudioConfig:
     chunk_minutes: int = 20
     overlap_seconds: int = 60
     sample_rate: int = 16000
-    chunk_mode: ChunkingMode = ChunkingMode.FULL  # Options: "full", "split", "overlap"
+    chunk_mode: ChunkingMode | str = ChunkingMode.FULL  # Options: "full", "split", "overlap"
+
+    def normalized_chunk_mode(self) -> ChunkingMode:
+        """Return the configured chunk mode as an enum value."""
+        if isinstance(self.chunk_mode, ChunkingMode):
+            return self.chunk_mode
+        return ChunkingMode(self.chunk_mode)
+
+    def validate(self) -> None:
+        """Validate audio processing settings."""
+        self.chunk_mode = self.normalized_chunk_mode()
+        if self.chunk_minutes <= 0:
+            raise ValueError("audio.chunk_minutes must be greater than 0.")
+        if self.overlap_seconds < 0:
+            raise ValueError("audio.overlap_seconds cannot be negative.")
+        if self.sample_rate <= 0:
+            raise ValueError("audio.sample_rate must be greater than 0.")
+        if self.chunk_mode is ChunkingMode.OVERLAP and self.overlap_seconds >= self.chunk_minutes * 60:
+            raise ValueError("audio.overlap_seconds must be smaller than the chunk duration for overlap mode.")
 
 
 @dataclass(slots=True)
@@ -33,6 +51,11 @@ class TranscriptionConfig:
     compute_type: str = "int8"
     workers: int = 1
 
+    def validate(self) -> None:
+        """Validate transcription settings."""
+        if self.workers <= 0:
+            raise ValueError("transcription.workers must be greater than 0.")
+
 
 @dataclass(slots=True)
 class OutputConfig:
@@ -40,6 +63,13 @@ class OutputConfig:
 
     directory: str = "output"
     format: list[str] = field(default_factory=lambda: ["json", "md"])
+
+    def validate(self) -> None:
+        """Validate output settings."""
+        if not self.directory.strip():
+            raise ValueError("output.directory cannot be empty.")
+        if not self.format:
+            raise ValueError("output.format must contain at least one format.")
 
 
 @dataclass(slots=True)
@@ -57,6 +87,14 @@ class SpeakerConfig:
 
     labels: dict[str, str] = field(default_factory=dict)
 
+    def validate(self) -> None:
+        """Validate configured speaker labels."""
+        for speaker_id, label in self.labels.items():
+            if not speaker_id.strip():
+                raise ValueError("speakers.labels cannot contain an empty speaker ID.")
+            if not label.strip():
+                raise ValueError(f"speakers.labels['{speaker_id}'] cannot be empty.")
+
 
 @dataclass(slots=True)
 class AppConfig:
@@ -71,13 +109,22 @@ class AppConfig:
     @classmethod
     def from_dict(cls, data: dict) -> AppConfig:
         """Build an application config from a parsed TOML dictionary."""
-        return cls(
+        config = cls(
             audio=AudioConfig(**data.get("audio", {})),
             transcription=TranscriptionConfig(**data.get("transcription", {})),
             output=OutputConfig(**data.get("output", {})),
             analysis=AnalysisConfig(**data.get("analysis", {})),
             speakers=SpeakerConfig(**data.get("speakers", {})),
         )
+        config.validate()
+        return config
+
+    def validate(self) -> None:
+        """Validate the composed application config."""
+        self.audio.validate()
+        self.transcription.validate()
+        self.output.validate()
+        self.speakers.validate()
 
     def shadow(self, **kwargs: Any) -> AppConfig:
         """Create a new AppConfig instance with overridden values.

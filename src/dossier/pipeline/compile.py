@@ -21,13 +21,7 @@ def compile_transcription(
     - track interleaving
     - final artifact creation
     """
-    match run.chunk_configuration.mode:
-        case ChunkingMode.FULL:
-            compile_tracks = compile_full(run)
-        case ChunkingMode.SPLIT:
-            compile_tracks = compile_split(run)
-        case ChunkingMode.OVERLAP:
-            compile_tracks = compile_overlap(run)
+    compile_tracks = _compile_tracks_for_mode(run)
 
     artifact = CompiledTranscriptArtifact(
         metadata=run.metadata.fresh(),
@@ -75,6 +69,16 @@ def compile_overlap(run: TranscriptionRunArtifact) -> list[list[TranscriptSegmen
         merged_tracks.append(merge_overlap_track([chunk.segments for chunk in chunks]))
 
     return merged_tracks
+
+
+def _compile_tracks_for_mode(run: TranscriptionRunArtifact) -> list[list[TranscriptSegment]]:
+    """Compile track transcript segments using the run's chunking mode."""
+    mode = run.chunk_configuration.mode
+    if mode.is_full_track():
+        return compile_full(run)
+    if mode.uses_overlap_merge():
+        return compile_overlap(run)
+    return compile_split(run)
 
 
 def _interleave_tracks(
