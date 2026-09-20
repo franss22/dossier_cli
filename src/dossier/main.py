@@ -63,7 +63,7 @@ def import_recording_command(
         aliases=aliases,
     )
     success(f"Imported recording: {artifact.recording.id}")
-    info(f"Name: {artifact.recording.name or artifact.recording.id}")
+    info(f"Name: {_display_name(artifact)}")
 
 
 @app.command("chunk")
@@ -90,7 +90,7 @@ def chunk_recording_command(
         "Chunk Recording",
         recording={
             "id": rec.recording.id,
-            "name": rec.recording.name or rec.recording.id,
+            "name": _display_name(rec),
         },
         chunking={
             "mode": mode.value,
@@ -146,7 +146,7 @@ def rename_recording_command(
     rec = _resolve_recording_or_exit(recording)
     renamed = IndexController().rename_recording(rec.recording.id, new_name)
     success(f"Renamed recording: {renamed.recording.id}")
-    info(f"New name: {renamed.recording.name or renamed.recording.id}")
+    info(f"New name: {_display_name(renamed)}")
 
 
 @app.command("delete-recording")
@@ -158,9 +158,7 @@ def delete_recording_command(
     rec = _resolve_recording_or_exit(recording)
 
     if not yes:
-        confirmed = typer.confirm(
-            f"Delete recording '{rec.recording.name or rec.recording.id}' ({rec.recording.id}) and all artifacts?"
-        )
+        confirmed = typer.confirm(f"Delete recording '{_display_name(rec)}' ({rec.recording.id}) and all artifacts?")
         if not confirmed:
             info("Deletion cancelled.")
             raise typer.Exit(code=0)
@@ -176,9 +174,7 @@ def clean_index_command(
 ) -> None:
     """Remove index entries whose recording artifacts no longer exist on disk."""
     controller = IndexController()
-    stale_recording_ids = [
-        entry.id for entry in controller.index.recordings if not RecordingArtifact._path(entry.id).exists()
-    ]
+    stale_recording_ids = [entry.id for entry in controller.index.recordings if not RecordingArtifact.exists(entry.id)]
 
     if not stale_recording_ids:
         info("Index is already clean.")
@@ -228,7 +224,7 @@ def transcribe_command(
         "Transcribe Recording",
         recording={
             "id": rec.recording.id,
-            "name": rec.recording.name or rec.recording.id,
+            "name": _display_name(rec),
         },
         transcription={
             "chunk set": chunkset.chunk_run.id,
@@ -327,10 +323,7 @@ def run_command(
         _print_run_failure(exc)
         raise typer.Exit(code=1) from exc
 
-    info(
-        f"Run complete for recording '{result.recording.recording.name or result.recording.recording.id}'"
-        f" ({result.recording.recording.id})."
-    )
+    info(f"Run complete for recording '{_display_name(result.recording)}' ({result.recording.recording.id}).")
     success(f"Transcription: {result.transcription.transcription.id}")
     path_success("Compiled transcript", result.compiled.storage_path())
     for mode, path in result.exports.items():
@@ -389,10 +382,7 @@ def queue_command(
     for item in result.items:
         info(f"[{item.input_file}]")
         if item.success and item.result is not None:
-            success(
-                f"{item.result.recording.recording.name or item.result.recording.recording.id}"
-                f" ({item.result.recording.recording.id})"
-            )
+            success(f"{_display_name(item.result.recording)} ({item.result.recording.recording.id})")
             for mode, path in item.result.exports.items():
                 path_success(f"Exported {mode.value}", path)
         elif item.error is not None:
@@ -448,7 +438,7 @@ def export_transcripts_command(
         "Export Transcript",
         recording={
             "id": rec.recording.id,
-            "name": rec.recording.name or rec.recording.id,
+            "name": _display_name(rec),
         },
         export={
             "transcription": transcript.transcription.id,
@@ -655,6 +645,23 @@ def _print_run_failure(exc: RunError) -> None:
         info("Then export with: dossier export <recording-id>")
     elif exc.stage == "export":
         info("Continue manually with: dossier export <recording-id>")
+
+
+def _display_name(recording: object) -> str:
+    """Return a best-effort human-readable recording name for CLI output."""
+    display_name = getattr(recording, "display_name", None)
+    if isinstance(display_name, str) and display_name:
+        return display_name
+
+    recording_meta = getattr(recording, "recording", None)
+    name = getattr(recording_meta, "name", None)
+    recording_id = getattr(recording_meta, "id", None)
+
+    if isinstance(name, str) and name:
+        return name
+    if isinstance(recording_id, str) and recording_id:
+        return recording_id
+    return "unknown"
 
 
 if __name__ == "__main__":

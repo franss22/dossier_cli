@@ -162,9 +162,7 @@ class IndexController:
 
     def clean_index(self) -> list[str]:
         """Remove stale index entries whose recording artifacts no longer exist."""
-        stale_recording_ids = [
-            entry.id for entry in self.index.recordings if not RecordingArtifact._path(entry.id).exists()
-        ]
+        stale_recording_ids = [entry.id for entry in self.index.recordings if not RecordingArtifact.exists(entry.id)]
 
         if not stale_recording_ids:
             self.index.rebuild_alias_index()

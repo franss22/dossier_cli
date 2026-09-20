@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from dossier.artifact.base import Export
 from dossier.artifact.transcripts.compiled import CompiledTranscriptArtifact
-from dossier.pipeline.exports.collapse import collapse_segments
+from dossier.pipeline.exports.common import collapsed_segments, map_collapsed_segments
 from dossier.utils.speakers import labelize_tracks
 
 
@@ -61,19 +61,17 @@ def export_llm_ready_transcript(transcript: CompiledTranscriptArtifact) -> LLMRe
     """
     speakers = labelize_tracks([track.id for track in transcript.tracks])
     header = LLMHeader(
-        n_of_segments=len(transcript.segments),
+        n_of_segments=len(collapsed_segments(transcript)),
         speakers=speakers,
     )
-    collapsed_segments = collapse_segments(transcript.segments)
-
-    segments = [
-        LLMSegment(
-            id=id,
+    segments = map_collapsed_segments(
+        transcript,
+        lambda index, segment: LLMSegment(
+            id=index,
             start_time=segment.start_time,
             end_time=segment.end_time,
             text=segment.text,
             speaker=speakers[segment.track_id],
-        )
-        for id, segment in enumerate(collapsed_segments)
-    ]
+        ),
+    )
     return LLMReadyExport(header=header, segments=segments, metadata=transcript.metadata.fresh())

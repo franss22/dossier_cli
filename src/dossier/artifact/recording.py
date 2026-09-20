@@ -70,6 +70,11 @@ class RecordingArtifact(Artifact):
         """Exact storage location for this artifact."""
         return self._path(self.recording.id)
 
+    @classmethod
+    def exists(cls, recording_id: str) -> bool:
+        """Return whether a recording artifact exists on disk."""
+        return cls._path(recording_id).exists()
+
     def get_tracks(self) -> list[tuple[AudioTrack, Path]]:
         """Get the absolute paths to all tracks in this recording."""
         return [(track, self.resolve(track)) for track in self.audio.tracks]
@@ -88,3 +93,8 @@ class RecordingArtifact(Artifact):
     def name(self) -> str | None:
         """Get the recording name."""
         return self.recording.name or self.id
+
+    @property
+    def display_name(self) -> str:
+        """Return the preferred human-readable name for this recording."""
+        return self.recording.name or self.recording.id

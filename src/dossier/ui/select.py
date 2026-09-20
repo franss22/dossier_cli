@@ -6,6 +6,22 @@ from dossier.artifact.chunks import ChunkSetArtifact
 from dossier.artifact.transcripts.compiled import CompiledTranscriptArtifact
 
 
+def _describe_transcript_decoder(transcript: CompiledTranscriptArtifact) -> str:
+    """Return a concise decoder description for one compiled transcript."""
+    decoder = transcript.transcription.decoder
+    return " | ".join(
+        value
+        for value in (
+            transcript.transcription.id,
+            decoder.model,
+            decoder.device,
+            decoder.compute_type,
+            decoder.language,
+        )
+        if value
+    )
+
+
 def select_transcript(transcripts: list[CompiledTranscriptArtifact]) -> CompiledTranscriptArtifact:
     """Prompt the user to select a transcript."""
     if len(transcripts) == 1:
@@ -13,7 +29,7 @@ def select_transcript(transcripts: list[CompiledTranscriptArtifact]) -> Compiled
 
     choices = [
         questionary.Choice(
-            title=f"{transcript.transcription.id} ({transcript.transcription.decoder.model})",
+            title=_describe_transcript_decoder(transcript),
             value=transcript,
         )
         for transcript in transcripts
@@ -50,34 +66,13 @@ def select_transcripts(transcripts: list[CompiledTranscriptArtifact]) -> list[Co
 
 def _transcript_repr(transcript: CompiledTranscriptArtifact) -> str:
     """Format compiled transcript decoder settings for interactive selection."""
-    decoder = transcript.transcription.decoder
-    return " | ".join(
-        value
-        for value in (
-            transcript.transcription.id,
-            decoder.model,
-            decoder.device,
-            decoder.compute_type,
-            decoder.language,
-        )
-        if value
-    )
+    return _describe_transcript_decoder(transcript)
 
 
 def _chunkset_repr(chunkset: ChunkSetArtifact) -> str:
-    match chunkset.chunk_run.mode:
-        case "full":
-            return f"{chunkset.chunk_run.id} (full tracks)"
-        case "split":
-            return f"{chunkset.chunk_run.id} ({chunkset.chunk_run.duration_seconds}s chunks)"
-        case "overlap":
-            return (
-                f"{chunkset.chunk_run.id} "
-                f"({chunkset.chunk_run.duration_seconds}s chunks, "
-                f"{chunkset.chunk_run.overlap_seconds}s overlap)"
-            )
-        case _:
-            raise ValueError(f"Unknown chunking mode: {chunkset.chunk_run.mode}")
+    return chunkset.chunk_run.describe_track(chunkset.tracks[0].track_id).replace(
+        chunkset.tracks[0].track_id, chunkset.chunk_run.id
+    )
 
 
 def select_chunkset(chunksets: list[ChunkSetArtifact]) -> ChunkSetArtifact:

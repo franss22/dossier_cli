@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from dossier.artifact.base import Export, JsonFile
 from dossier.artifact.transcripts.compiled import CompiledTranscriptArtifact
-from dossier.pipeline.exports.collapse import collapse_segments
+from dossier.pipeline.exports.common import map_collapsed_segments
 from dossier.utils.timestamp import timestamp
 
 
@@ -42,18 +42,16 @@ def export_lean_json_transcript(transcript: CompiledTranscriptArtifact) -> LeanJ
     Returns:
         The Lean JSON-formatted transcript as a LeanJsonTranscript object.
     """
-    collapsed_segments = collapse_segments(transcript.segments)
-
-    segments = [
-        LeanSegment(
-            id=i,
+    segments = map_collapsed_segments(
+        transcript,
+        lambda index, segment: LeanSegment(
+            id=index,
             start_time=segment.start,
             end_time=segment.end,
             duration=segment.duration,
             text=segment.text,
             speaker_id=segment.track_id,
-        )
-        for i, segment in enumerate(collapsed_segments)
-    ]
+        ),
+    )
 
     return LeanJsonTranscript(metadata=transcript.metadata.fresh(), segments=segments)
