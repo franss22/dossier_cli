@@ -25,3 +25,7 @@ storage/*
 
 profiles/*
 !profiles/.keep
+.aider*
+
+
+**.prompt.md
