@@ -35,6 +35,8 @@ class ActiveTrackProgress(BaseModel):
     total_chunks: int
     completed_chunks: int
     current_chunk_id: str | None = None
+    current_chunk_processed_seconds: float = 0.0
+    current_chunk_duration_seconds: float = 0.0
 
 
 @dataclass(slots=True)
@@ -47,6 +49,8 @@ class TrackWorkerUpdate:
     total_chunks: int
     completed_chunks: int
     timestamp: datetime
+    processed_audio_seconds: float = 0.0
+    chunk_duration_seconds: float = 0.0
     acknowledge: Event | None = None
 
 
@@ -327,6 +331,7 @@ class Transcriber(ABC):
                     total_chunks=total_chunks,
                     completed_chunks=completed_chunks,
                     timestamp=started_at,
+                    chunk_duration_seconds=chunk.duration,
                     acknowledge=started_ack,
                 )
             )
@@ -340,7 +345,32 @@ class Transcriber(ABC):
                 )
 
             try:
-                artifact = self.transcribe_chunk(chunk, track_id=track.track_id)
+                def report_chunk_progress(
+                    processed_audio_seconds: float,
+                    *,
+                    track_id: str = track.track_id,
+                    chunk_id: str = chunk.id,
+                    duration: float = chunk.duration,
+                    current_completed_chunks: int = completed_chunks,
+                ) -> None:
+                    report_update(
+                        TrackWorkerUpdate(
+                            kind="progress",
+                            track_id=track_id,
+                            chunk_id=chunk_id,
+                            total_chunks=total_chunks,
+                            completed_chunks=current_completed_chunks,
+                            timestamp=datetime.now(UTC),
+                            processed_audio_seconds=processed_audio_seconds,
+                            chunk_duration_seconds=duration,
+                        )
+                    )
+
+                artifact = self.transcribe_chunk(
+                    chunk,
+                    track_id=track.track_id,
+                    progress_callback=report_chunk_progress,
+                )
                 artifact.save()
             except Exception as exc:
                 return TrackWorkerResult(
@@ -359,6 +389,8 @@ class Transcriber(ABC):
                     total_chunks=total_chunks,
                     completed_chunks=completed_chunks,
                     timestamp=datetime.now(UTC),
+                    processed_audio_seconds=chunk.duration,
+                    chunk_duration_seconds=chunk.duration,
                 )
             )
 
@@ -395,6 +427,8 @@ class Transcriber(ABC):
                 total_chunks=update.total_chunks,
                 completed_chunks=update.completed_chunks,
                 current_chunk_id=update.chunk_id,
+                current_chunk_processed_seconds=update.processed_audio_seconds,
+                current_chunk_duration_seconds=update.chunk_duration_seconds,
             )
             manifest.save()
             self._refresh_progress(active_tracks, completed_tracks, manifest)
@@ -453,6 +487,7 @@ class Transcriber(ABC):
         self,
         chunk: ChunkMetadata,
         track_id: str,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ChunkTranscriptArtifact:
         """
         Transcribe a single audio chunk.

@@ -9,29 +9,44 @@ from rich.text import Text
 console = Console()
 
 
+def supports_unicode(output: Console) -> bool:
+    """Return whether a Rich console can encode Unicode status symbols."""
+    return output.encoding.lower().replace("_", "-") in {"utf-8", "utf8"}
+
+
+if supports_unicode(console):
+    INFO_SYMBOL = "→"
+    SUCCESS_SYMBOL = "✓"
+    ERROR_SYMBOL = "✗"
+else:
+    INFO_SYMBOL = ">"
+    SUCCESS_SYMBOL = "OK"
+    ERROR_SYMBOL = "X"
+
+
 def info(message: str) -> None:
     """Print an informational message to the console."""
-    console.print(f"[cyan]→[/cyan] {message}")
+    console.print(f"[cyan]{INFO_SYMBOL}[/cyan] {message}")
 
 
 def success(message: str) -> None:
     """Print a success message to the console."""
-    console.print(f"[green]✓[/green] {message}")
+    console.print(f"[green]{SUCCESS_SYMBOL}[/green] {message}")
 
 
 def error(message: str) -> None:
     """Print an error message to the console."""
-    console.print(f"[red]✗[/red] {message}")
+    console.print(f"[red]{ERROR_SYMBOL}[/red] {message}")
 
 
 def path_success(label: str, path: Path) -> None:
     """Print a success message with a clickable path label."""
-    console.print(_path_message("[green]✓[/green]", label, path))
+    console.print(_path_message(f"[green]{SUCCESS_SYMBOL}[/green]", label, path))
 
 
 def path_info(label: str, path: Path) -> None:
     """Print an informational message with a clickable path label."""
-    console.print(_path_message("[cyan]→[/cyan]", label, path))
+    console.print(_path_message(f"[cyan]{INFO_SYMBOL}[/cyan]", label, path))
 
 
 def print_run_header(

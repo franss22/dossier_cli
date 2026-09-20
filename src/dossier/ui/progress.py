@@ -22,6 +22,7 @@ from rich.progress import Task as RichTask
 from rich.text import Text
 
 from dossier.transcriber.transcriber import TranscriptionProgress
+from dossier.ui.console import supports_unicode
 
 console = Console()
 
@@ -233,17 +234,22 @@ class Checklist:
         elapsed = perf_counter() - self.started
 
         lines: list[Text] = []
+        symbols = (
+            {
+                ChecklistState.PENDING: "○",
+                ChecklistState.RUNNING: "▶",
+                ChecklistState.COMPLETE: "✓",
+            }
+            if supports_unicode(console)
+            else {
+                ChecklistState.PENDING: "o",
+                ChecklistState.RUNNING: ">",
+                ChecklistState.COMPLETE: "OK",
+            }
+        )
 
         for item, done in self.items.items():
-            match done:
-                case ChecklistState.PENDING:
-                    symbol = "○"
-                case ChecklistState.RUNNING:
-                    symbol = "▶"
-                case ChecklistState.COMPLETE:
-                    symbol = "✓"
-
-            lines.append(Text(f"{symbol} {item}"))
+            lines.append(Text(f"{symbols[done]} {item}"))
 
         lines.append(
             Text(
@@ -343,23 +349,14 @@ class RunProgress:
         self,
         task: Task,
     ) -> Generator[Callable[[TranscriptionProgress], None]]:
-        """Create a callback that nests chunk progress under the transcription stage."""
-        track_context = None
-        track_task = None
-        active_track_id: str | None = None
+        """Create a callback that renders one nested task for every active track."""
+        track_tasks: dict[str, TaskID] = {}
 
-        def close_track_task() -> None:
-            nonlocal track_context, track_task, active_track_id
-
-            if track_context is not None:
-                track_context.__exit__(None, None, None)
-            track_context = None
-            track_task = None
-            active_track_id = None
+        def close_missing_track_tasks(active_track_ids: set[str]) -> None:
+            for track_id in set(track_tasks) - active_track_ids:
+                self.ui.progress.remove_task(track_tasks.pop(track_id))
 
         def on_progress(state: TranscriptionProgress) -> None:
-            nonlocal track_context, track_task, active_track_id
-
             task.update(
                 total=state.total_chunks,
                 completed=state.completed_chunks,
@@ -368,24 +365,29 @@ class RunProgress:
                 ),
             )
 
-            current_track_id = state.current_track_id or "Track"
-            if current_track_id != active_track_id:
-                close_track_task()
-                track_context = self.ui.task(current_track_id, total=state.current_track_total_chunks, prefix="  ")
-                track_task = track_context.__enter__()
-                active_track_id = current_track_id
+            active_track_ids = {track.track_id for track in state.active_tracks}
+            close_missing_track_tasks(active_track_ids)
 
-            if track_task is not None:
-                track_task.update(
-                    total=state.current_track_total_chunks,
-                    completed=state.current_track_completed_chunks,
-                    description=current_track_id,
+            for track in state.active_tracks:
+                if track.track_id not in track_tasks:
+                    track_tasks[track.track_id] = self.ui.progress.add_task(
+                        f"  {track.track_id}",
+                        total=track.current_chunk_duration_seconds or None,
+                    )
+
+                self.ui.progress.update(
+                    track_tasks[track.track_id],
+                    total=track.current_chunk_duration_seconds or None,
+                    completed=track.current_chunk_processed_seconds,
+                    description=(
+                        f"  {track.track_id} ({track.completed_chunks}/{track.total_chunks} chunks)"
+                    ),
                 )
 
         try:
             yield on_progress
         finally:
-            close_track_task()
+            close_missing_track_tasks(set())
 
 
 @contextmanager

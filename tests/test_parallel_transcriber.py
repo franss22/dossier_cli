@@ -81,7 +81,11 @@ class RecordingTranscriber(Transcriber):
         self,
         chunk: ChunkMetadata,
         track_id: str,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ChunkTranscriptArtifact:
+        if progress_callback is not None:
+            progress_callback(chunk.duration / 2)
+
         with self.log_lock:
             self.call_log.append((track_id, chunk.id, "start", get_ident()))
 
@@ -180,6 +184,13 @@ class ParallelTranscriberTests(TestCase):
         self.assertTrue(all(state.completed for state in manifest.chunk_states.values()))
         self.assertGreaterEqual(len({entry[3] for entry in transcriber.call_log}), 2)
         self.assertTrue(any(len(state.active_tracks) >= 2 for state in progress_states))
+        self.assertTrue(
+            any(
+                track.current_chunk_processed_seconds == 5
+                for state in progress_states
+                for track in state.active_tracks
+            )
+        )
 
         track_a_events = [event[2] for event in transcriber.call_log if event[0] == "track_a"]
         track_b_events = [event[2] for event in transcriber.call_log if event[0] == "track_b"]

@@ -159,6 +159,7 @@ class MockTranscriber(Transcriber):
         self,
         chunk: ChunkMetadata,
         track_id: str,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ChunkTranscriptArtifact:
         """Transcribe a single chunk of audio into text."""
         mock_segments = self.recording.window(

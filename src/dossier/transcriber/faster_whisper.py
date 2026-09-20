@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import statistics
+from contextvars import ContextVar
 from dataclasses import dataclass
 from time import perf_counter, process_time
 from typing import TYPE_CHECKING, Any
 
 import faster_whisper
 from faster_whisper import WhisperModel
+from faster_whisper import transcribe as faster_whisper_transcribe
 from icecream import ic
 
 from dossier.artifact.transcripts import (
@@ -33,6 +35,7 @@ from dossier.utils.serializing import jsonable_object
 from dossier.utils.types import _UNSET, _Unset
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from faster_whisper.transcribe import Segment, TranscriptionInfo, Word
@@ -86,14 +89,19 @@ class FasterWhisperTranscriber(Transcriber):
         self,
         chunk: ChunkMetadata,
         track_id: str,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> ChunkTranscriptArtifact:
         """Transcribe a single audio chunk."""
         kwargs = self._transcribe_kwargs()
         wall_start = perf_counter()
         cpu_start = process_time()
 
-        segments, info = self.model.transcribe(str(self.chunkset.resolve(chunk)), **kwargs)
-        raw_segments = list(segments)  # Consumes the generator, actual decoding happens here
+        progress_token = _processed_audio_callback.set(progress_callback)
+        try:
+            segments, info = self.model.transcribe(str(self.chunkset.resolve(chunk)), **kwargs)
+            raw_segments = list(segments)  # Consumes the generator, actual decoding happens here
+        finally:
+            _processed_audio_callback.reset(progress_token)
 
         wall_end = perf_counter()
         cpu_end = process_time()
@@ -270,3 +278,31 @@ class ChunkDecodeState:
     transcript_segments: list[TranscriptSegment]
     wall_time: float
     cpu_time: float
+
+
+_processed_audio_callback: ContextVar[object | None] = ContextVar(
+    "processed_audio_callback",
+    default=None,
+)
+_faster_whisper_tqdm = faster_whisper_transcribe.tqdm
+
+
+class _ProgressTqdm:
+    """Forward Faster-Whisper's internal processed-audio updates to this backend."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._progress = _faster_whisper_tqdm(*args, **kwargs)
+        self._callback: Callable[[float], None] | None = _processed_audio_callback.get()  # type: ignore[assignment]
+
+    def update(self, amount: float = 1) -> Any:
+        if self._callback is not None:
+            self._callback(amount)
+        return self._progress.update(amount)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._progress, name)
+
+
+# Faster-Whisper reads this factory from its module global inside generate_segments.
+# Context variables keep concurrent decoding calls isolated by worker thread.
+faster_whisper_transcribe.tqdm = _ProgressTqdm
