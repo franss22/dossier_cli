@@ -16,7 +16,7 @@ from dossier.artifact.transcripts import CompiledTranscriptArtifact, Transcripti
 from dossier.pipeline.export import ExportMode, export_transcription
 from dossier.pipeline.run import RunError, RunRequest, run_recording
 from dossier.ui.console import error, info, path_info, path_success, print_run_header, success
-from dossier.ui.select import select_chunkset, select_transcript
+from dossier.ui.select import select_chunkset, select_transcript, select_transcripts
 from dossier.utils.config import get_config
 from dossier.utils.types import _UNSET
 
@@ -127,10 +127,8 @@ def list_recordings_command() -> None:
             recording.display_name,
             ", ".join(recording.aliases) or "[dim]-[/]",
             recording.id,
-        )
-
-    console.print(table)
-    info(f"{len(index_controller.index.recordings)} recording(s).")
+    for recording_id in removed:
+        info(recording_id)
 
 
 @app.command("transcribe")
@@ -326,6 +324,62 @@ def export_transcripts_command(
     path_success(f"Exported {format.value}", p)
 
 
+@app.command("compare")
+def compare_transcripts_command(
+    transcripts: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Two or more Lean JSON exports. The first is the baseline."),
+    ] = None,
+    recording: str | None = typer.Option(None, "--recording", help="Browse compiled transcripts for this recording."),
+    transcription: list[str] = typer.Option(
+        [],
+        "--transcription",
+        help="Compiled transcription ID to compare. Repeat; the first is the baseline.",
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="HTML report path."),
+) -> None:
+    """Compare two or more transcript runs and write an HTML report."""
+    from dossier.compare import compare, default_report_path, load_compiled_transcript, load_lean_json, write_report
+
+    transcript_paths = transcripts or []
+    if recording is not None and transcript_paths:
+        raise typer.BadParameter("Use either transcript paths or --recording, not both.")
+    if recording is None and not transcript_paths:
+        raise typer.BadParameter("Provide two Lean JSON paths or use --recording.")
+
+    if recording is None:
+        if len(transcript_paths) < 2:
+            raise typer.BadParameter("Provide at least two transcript paths.")
+        selected = [load_lean_json(path) for path in transcript_paths]
+    else:
+        rec = _resolve_recording_or_exit(recording)
+        available = CompiledTranscriptArtifact.list(rec.recording.id)
+        if len(available) < 2:
+            raise typer.BadParameter(
+                f"Recording '{rec.recording.id}' needs at least two compiled transcripts to compare."
+            )
+        _print_compiled_transcript_settings(available)
+        if transcription:
+            lookup = {artifact.transcription.id: artifact for artifact in available}
+            missing = [transcription_id for transcription_id in transcription if transcription_id not in lookup]
+            if missing:
+                raise typer.BadParameter(f"Unknown compiled transcription ID(s): {', '.join(missing)}.")
+            selected_artifacts = [lookup[transcription_id] for transcription_id in transcription]
+        else:
+            selected_artifacts = select_transcripts(available)
+        if len(selected_artifacts) < 2:
+            raise typer.BadParameter("Select at least two compiled transcripts to compare.")
+        selected = [load_compiled_transcript(artifact) for artifact in selected_artifacts]
+
+    baseline, *candidates = selected
+    comparisons = [compare(baseline, candidate) for candidate in candidates]
+    report_path = output or default_report_path(baseline)
+    write_report(baseline, comparisons, report_path)
+    path_success("Comparison report", report_path)
+    for result in comparisons:
+        info(f"{result.candidate.label}: {result.similarity:.2%} similarity, {result.differing_words} differing words.")
+
+
 def main() -> None:
     """Expose entrypoint for the Transcriber CLI."""
     app()
@@ -392,6 +446,30 @@ def _resolve_compiled_transcript_or_exit(
         return compiled_transcripts[0]
 
     return select_transcript(compiled_transcripts)
+
+
+def _print_compiled_transcript_settings(transcripts: list[CompiledTranscriptArtifact]) -> None:
+    """Display compiled runs and their decoder snapshots for comparison selection."""
+    table = Table(title="Compiled Transcripts", box=box.SIMPLE_HEAD)
+    table.add_column("Transcription ID", style="cyan")
+    table.add_column("Backend")
+    table.add_column("Model")
+    table.add_column("Device")
+    table.add_column("Compute")
+    table.add_column("Language")
+
+    for transcript in transcripts:
+        decoder = transcript.transcription.decoder
+        table.add_row(
+            transcript.transcription.id,
+            decoder.backend,
+            decoder.model or "-",
+            decoder.device or "-",
+            decoder.compute_type or "-",
+            decoder.language or "-",
+        )
+
+    Console().print(table)
 
 
 def _print_run_failure(exc: RunError) -> None:
