@@ -10,6 +10,36 @@ from slugify import slugify
 from dossier.utils.config import get_config
 from dossier.utils.timestamp import timestamp
 
+ADJECTIVES = (
+    "amber",
+    "brisk",
+    "cinder",
+    "distant",
+    "ember",
+    "faded",
+    "hollow",
+    "ivory",
+    "lucid",
+    "mellow",
+    "quiet",
+    "silver",
+)
+
+NOUNS = (
+    "anchor",
+    "comet",
+    "drift",
+    "falcon",
+    "harbor",
+    "lantern",
+    "meadow",
+    "needle",
+    "orbit",
+    "signal",
+    "thicket",
+    "window",
+)
+
 
 class DecoderConfiguration(BaseModel):
     """Complete ASR decoder configuration snapshot."""
@@ -51,14 +81,17 @@ class TranscriptionRun(BaseModel):
         device: str,
     ) -> str:
         """Build a unique transcription run ID."""
-        return "_".join(
-            [
-                slugify(model),
-                slugify(device),
-                timestamp(),
-                secrets.token_hex(4),
-            ]
-        )
+        adjective = secrets.choice(ADJECTIVES)
+        noun = secrets.choice(NOUNS)
+
+        return "_".join([
+            slugify(model),
+            slugify(device),
+            adjective,
+            noun,
+            timestamp(),
+            secrets.token_hex(4),
+        ])
 
     @classmethod
     def create(

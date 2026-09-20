@@ -142,6 +142,40 @@ class IndexController:
         self.index.rebuild_alias_index()
         self.save_index()
 
+    def rename_recording(self, recording_id: str, new_name: str) -> RecordingArtifact:
+        """Rename a recording in both the index and recording artifact."""
+        if not new_name.strip():
+            raise ValueError("Recording name cannot be empty.")
+
+        recording = RecordingArtifact.load(recording_id)
+        recording.recording.name = new_name.strip()
+        recording.save()
+
+        for entry in self.index.recordings:
+            if entry.id == recording_id:
+                entry.display_name = new_name.strip()
+                self.index.rebuild_alias_index()
+                self.save_index()
+                return recording
+
+        raise ValueError(f"Recording '{recording_id}' not found in index.")
+
+    def clean_index(self) -> list[str]:
+        """Remove stale index entries whose recording artifacts no longer exist."""
+        stale_recording_ids = [
+            entry.id for entry in self.index.recordings if not RecordingArtifact._path(entry.id).exists()
+        ]
+
+        if not stale_recording_ids:
+            self.index.rebuild_alias_index()
+            self.save_index()
+            return []
+
+        self.index.recordings = [entry for entry in self.index.recordings if entry.id not in stale_recording_ids]
+        self.index.rebuild_alias_index()
+        self.save_index()
+        return stale_recording_ids
+
 
 def generate_recording_id(name: str) -> str:
     """Generate a unique ID for the recording, still human readable and relevant to the workspace name."""

@@ -18,6 +18,7 @@ from dossier.pipeline.run import RunError, RunRequest, run_recording
 from dossier.ui.console import error, info, path_info, path_success, print_run_header, success
 from dossier.ui.select import select_chunkset, select_transcript, select_transcripts
 from dossier.utils.config import get_config
+from dossier.utils.storage import delete_recording_directory
 from dossier.utils.types import _UNSET
 
 CONFIG = get_config()
@@ -127,6 +128,71 @@ def list_recordings_command() -> None:
             recording.display_name,
             ", ".join(recording.aliases) or "[dim]-[/]",
             recording.id,
+        )
+
+    console.print(table)
+    info(f"{len(index_controller.index.recordings)} recording(s).")
+
+
+@app.command("rename-recording")
+def rename_recording_command(
+    recording: Annotated[str, typer.Argument(help="Recording ID or alias to rename.")],
+    new_name: Annotated[str, typer.Argument(help="New human-readable name.")],
+) -> None:
+    """Rename a recording's display name without changing its recording ID."""
+    rec = _resolve_recording_or_exit(recording)
+    renamed = IndexController().rename_recording(rec.recording.id, new_name)
+    success(f"Renamed recording: {renamed.recording.id}")
+    info(f"New name: {renamed.recording.name or renamed.recording.id}")
+
+
+@app.command("delete-recording")
+def delete_recording_command(
+    recording: Annotated[str, typer.Argument(help="Recording ID or alias to delete.")],
+    yes: bool = typer.Option(False, "--yes", help="Delete without confirmation."),
+) -> None:
+    """Delete a recording workspace and remove it from the index."""
+    rec = _resolve_recording_or_exit(recording)
+
+    if not yes:
+        confirmed = typer.confirm(
+            f"Delete recording '{rec.recording.name or rec.recording.id}' ({rec.recording.id}) and all artifacts?"
+        )
+        if not confirmed:
+            info("Deletion cancelled.")
+            raise typer.Exit(code=0)
+
+    delete_recording_directory(rec.recording.id)
+    IndexController().remove_recording(rec.recording.id)
+    success(f"Deleted recording: {rec.recording.id}")
+
+
+@app.command("clean-index")
+def clean_index_command(
+    yes: bool = typer.Option(False, "--yes", help="Remove stale index entries without confirmation."),
+) -> None:
+    """Remove index entries whose recording artifacts no longer exist on disk."""
+    controller = IndexController()
+    stale_recording_ids = [
+        entry.id for entry in controller.index.recordings if not RecordingArtifact._path(entry.id).exists()
+    ]
+
+    if not stale_recording_ids:
+        info("Index is already clean.")
+        return
+
+    if not yes:
+        info("Stale index entries detected:")
+        for recording_id in stale_recording_ids:
+            info(f"- {recording_id}")
+
+        confirmed = typer.confirm("Remove these stale entries from the index?")
+        if not confirmed:
+            info("Index cleanup cancelled.")
+            raise typer.Exit(code=0)
+
+    removed = controller.clean_index()
+    success(f"Removed {len(removed)} stale index entr{'y' if len(removed) == 1 else 'ies'}.")
     for recording_id in removed:
         info(recording_id)
 
