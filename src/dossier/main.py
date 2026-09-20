@@ -14,6 +14,7 @@ from dossier.artifact.index import IndexController
 from dossier.artifact.recording import RecordingArtifact
 from dossier.artifact.transcripts import CompiledTranscriptArtifact, TranscriptionRunArtifact
 from dossier.pipeline.export import ExportMode, export_transcription
+from dossier.pipeline.queue import QueueRequest, load_queue_file, run_queue
 from dossier.pipeline.run import RunError, RunRequest, run_recording
 from dossier.ui.console import error, info, path_info, path_success, print_run_header, success
 from dossier.ui.select import select_chunkset, select_transcript, select_transcripts
@@ -332,6 +333,73 @@ def run_command(
     path_success("Compiled transcript", result.compiled.storage_path())
     for mode, path in result.exports.items():
         path_success(f"Exported {mode.value}", path)
+
+
+@app.command("queue")
+def queue_command(
+    input_files: Annotated[
+        list[Path] | None,
+        typer.Argument(help="One or more source recordings to process sequentially."),
+    ] = None,
+    from_file: Path | None = typer.Option(None, "--from-file", help="Text file with one source path per line."),
+    fail_fast: bool = typer.Option(False, "--fail-fast", help="Stop after the first failed queue item."),
+    model: str = typer.Option(CONFIG.transcription.model_size, help="Transcription model to use."),
+    device: str = typer.Option(CONFIG.transcription.device, help="Device to use for transcription."),
+    compute_type: str = typer.Option(CONFIG.transcription.compute_type, help="Compute type to use for transcription."),
+    language: str | None = typer.Option(CONFIG.transcription.language, help="Language of the recording (optional)."),
+    prompt: Path | None = typer.Option(None, help="Path to a prompt file (optional)."),
+    export: list[ExportMode] | None = typer.Option(None, "--export", help="Export mode(s) to emit. Defaults to all."),
+) -> None:
+    """Process multiple source recordings sequentially through the happy-path pipeline."""
+    queued_files = tuple(input_files or []) + tuple(load_queue_file(from_file) if from_file is not None else [])
+    if not queued_files:
+        raise typer.BadParameter("Provide one or more input files or use --from-file.")
+
+    export_modes = tuple(export) if export else tuple(ExportMode)
+
+    print_run_header(
+        "Queue Recordings",
+        queue={
+            "items": str(len(queued_files)),
+            "fail fast": "yes" if fail_fast else "no",
+        },
+        transcription={
+            "model": model,
+            "device": device,
+            "compute": compute_type,
+            "language": language or "auto-detect",
+        },
+    )
+
+    result = run_queue(
+        QueueRequest(
+            input_files=queued_files,
+            model=model,
+            device=device,
+            compute_type=compute_type,
+            export_modes=export_modes,
+            fail_fast=fail_fast,
+            language=language,
+            prompt=prompt or _UNSET,
+        )
+    )
+
+    for item in result.items:
+        info(f"[{item.input_file}]")
+        if item.success and item.result is not None:
+            success(
+                f"{item.result.recording.recording.name or item.result.recording.recording.id}"
+                f" ({item.result.recording.recording.id})"
+            )
+            for mode, path in item.result.exports.items():
+                path_success(f"Exported {mode.value}", path)
+        elif item.error is not None:
+            error(str(item.error))
+
+    info(f"Queue complete: {len(result.succeeded)} succeeded, {len(result.failed)} failed, {len(result.items)} total.")
+
+    if result.failed:
+        raise typer.Exit(code=1)
 
 
 @app.command("compile")
