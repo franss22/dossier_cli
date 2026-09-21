@@ -4,6 +4,9 @@ import difflib
 
 from dossier.artifact.transcripts import TranscriptSegment
 
+# These values intentionally bias toward conservative duplicate detection.
+# We only merge when both timing overlap and textual similarity are strong,
+# so neighboring chunks are less likely to collapse genuinely distinct lines.
 SIMILARITY_THRESHOLD = 0.7
 MIN_OVERLAP_RATIO = 0.5
 
@@ -36,7 +39,7 @@ def _should_merge(
     a: TranscriptSegment,
     b: TranscriptSegment,
 ) -> bool:
-    """Determine whether two segments are duplicates."""
+    """Determine whether two overlapping segments likely represent the same utterance."""
     overlap = min(a.end, b.end) - max(a.start, b.start)
 
     if overlap <= 0:
@@ -57,7 +60,7 @@ def _choose_segment(
     a: TranscriptSegment,
     b: TranscriptSegment,
 ) -> TranscriptSegment:
-    """Choose the higher-quality duplicate."""
+    """Choose the stronger duplicate candidate using simple length-based heuristics."""
     return max(
         a,
         b,
@@ -72,7 +75,7 @@ def _stitch_chunks(
     previous: list[TranscriptSegment],
     current: list[TranscriptSegment],
 ) -> list[TranscriptSegment]:
-    """Merge two adjacent chunks."""
+    """Merge two adjacent chunks while deduplicating overlap candidates near the boundary."""
     merged = previous.copy()
 
     for segment in current:
